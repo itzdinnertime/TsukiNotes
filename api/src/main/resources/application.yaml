@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: api
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tsukinote
+    username: tsukinote_user
+    password: tsukinote_pass
