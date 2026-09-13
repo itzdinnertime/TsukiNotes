@@ -27,6 +27,6 @@ public class ItemController {
         Identity identity = identityRepository.findById(request.getIdentityId())
                 .orElseThrow(() -> new IllegalArgumentException("Identity not found"));
 
-        return itemService.createItem(identity, request.getUniqueKey(), request.getType(), request.getContent());
+        return itemService.createItem(identity, request.getUniqueKey(), request.getType(), request.getContent(), request.getTags());
     }
 }

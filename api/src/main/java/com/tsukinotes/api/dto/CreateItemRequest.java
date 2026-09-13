@@ -1,11 +1,14 @@
 package com.tsukinotes.api.dto;
 
+import java.util.List;
+
 public class CreateItemRequest {
 
     private Long identityId;
     private String uniqueKey;
     private String type;
     private String content;
+    private List<String> tags;
 
     public Long getIdentityId() {
         return identityId;
@@ -37,5 +40,13 @@ public class CreateItemRequest {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public List<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(List<String> tags) {
+        this.tags = tags;
     }
 }
