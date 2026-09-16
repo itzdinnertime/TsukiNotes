@@ -20,6 +20,11 @@ public class InviteGateFilter extends HttpFilter {
     protected void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws IOException, ServletException {
 
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         String providedToken = request.getHeader("X-Invite-Token");
 
         if (providedToken == null || !providedToken.equals(inviteToken)) {
