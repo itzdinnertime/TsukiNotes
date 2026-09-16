@@ -1,122 +1,100 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from "react";
+import { createItem, searchItems, pickIdentity } from "./api";
 
 function App() {
-  const [count, setCount] = useState(0)
+    const [identity, setIdentity] = useState(null);
+    const [nameInput, setNameInput] = useState("");
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    const [uniqueKey, setUniqueKey] = useState("");
+    const [type, setType] = useState("link");
+    const [content, setContent] = useState("");
+    const [tagsInput, setTagsInput] = useState("");
+
+    const [searchTagsInput, setSearchTagsInput] = useState("");
+    const [results, setResults] = useState([]);
+    const [error, setError] = useState("");
+
+    async function handlePickName(e) {
+        e.preventDefault();
+        try {
+            const id = await pickIdentity(nameInput);
+            setIdentity(id);
+            setError("");
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleCreate(e) {
+        e.preventDefault();
+        try {
+            const tags = tagsInput.split(",").map(t => t.trim()).filter(Boolean);
+            await createItem(identity.id, uniqueKey, type, content, tags);
+            setUniqueKey("");
+            setContent("");
+            setTagsInput("");
+            setError("");
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleSearch(e) {
+        e.preventDefault();
+        try {
+            const tags = searchTagsInput.split(",").map(t => t.trim()).filter(Boolean);
+            const found = await searchItems(tags);
+            setResults(found);
+            setError("");
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    if (!identity) {
+        return (
+            <form onSubmit={handlePickName}>
+                <h2>Pick a name</h2>
+                <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="your name" />
+                <button type="submit">Enter</button>
+                {error && <p style={{ color: "red" }}>{error}</p>}
+            </form>
+        );
+    }
+
+    return (
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+            <h2>Welcome, {identity.name}</h2>
 
-      <div className="ticks"></div>
+            <form onSubmit={handleCreate}>
+                <h3>Create item</h3>
+                <input value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} placeholder="unique key" />
+                <select value={type} onChange={e => setType(e.target.value)}>
+                    <option value="link">link</option>
+                    <option value="note">note</option>
+                </select>
+                <input value={content} onChange={e => setContent(e.target.value)} placeholder="content / URL" />
+                <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="tags, comma separated" />
+                <button type="submit">Create</button>
+            </form>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            <form onSubmit={handleSearch}>
+                <h3>Search</h3>
+                <input value={searchTagsInput} onChange={e => setSearchTagsInput(e.target.value)} placeholder="tags, comma separated" />
+                <button type="submit">Search</button>
+            </form>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            {error && <p style={{ color: "red" }}>{error}</p>}
+
+            <ul>
+                {results.map(item => (
+                    <li key={item.id}>
+                        <strong>{item.uniqueKey}</strong> ({item.type}): {item.content} — tags: {item.tags.join(", ")}
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
 }
 
-export default App
+export default App;
