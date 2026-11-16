@@ -77,3 +77,69 @@ li {
 li strong {
     color: #5865f2;
 }
+
+button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.auth-card {
+    max-width: 380px;
+    margin: 4rem auto 0;
+}
+
+.auth-card label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: #a8adb8;
+}
+
+.auth-card button[type="submit"] {
+    align-self: stretch;
+}
+
+.auth-links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #a8adb8;
+}
+
+.link-button {
+    background: none;
+    padding: 0;
+    color: #8b93ff;
+    font-weight: 500;
+    align-self: auto;
+}
+
+.link-button:hover {
+    background: none;
+    text-decoration: underline;
+}
+
+.error {
+    color: #f87171;
+    margin: 0;
+}
+
+.notice,
+.muted {
+    color: #a8adb8;
+    margin: 0;
+}
+
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.app-header h2 {
+    margin: 0;
+}

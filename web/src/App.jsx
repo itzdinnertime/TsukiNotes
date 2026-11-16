@@ -1,9 +1,19 @@
 import { useState } from "react";
-import { createItem, searchItems, pickIdentity } from "./api";
+import { createItem, searchItems } from "./api";
+import AuthPage from "./AuthPage";
+
+const IDENTITY_STORAGE_KEY = "tsukinotes.identity";
+
+function loadStoredIdentity() {
+    try {
+        return JSON.parse(localStorage.getItem(IDENTITY_STORAGE_KEY));
+    } catch {
+        return null;
+    }
+}
 
 function App() {
-    const [identity, setIdentity] = useState(null);
-    const [nameInput, setNameInput] = useState("");
+    const [identity, setIdentity] = useState(loadStoredIdentity);
 
     const [uniqueKey, setUniqueKey] = useState("");
     const [type, setType] = useState("link");
@@ -14,15 +24,16 @@ function App() {
     const [results, setResults] = useState([]);
     const [error, setError] = useState("");
 
-    async function handlePickName(e) {
-        e.preventDefault();
-        try {
-            const id = await pickIdentity(nameInput);
-            setIdentity(id);
-            setError("");
-        } catch (err) {
-            setError(err.message);
-        }
+    function handleAuthenticated(id) {
+        localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(id));
+        setIdentity(id);
+    }
+
+    function handleLogOut() {
+        localStorage.removeItem(IDENTITY_STORAGE_KEY);
+        setIdentity(null);
+        setResults([]);
+        setError("");
     }
 
     async function handleCreate(e) {
@@ -52,26 +63,24 @@ function App() {
     }
 
     if (!identity) {
-        return (
-            <form onSubmit={handlePickName}>
-                <h2>Pick a name</h2>
-                <input value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="your name" />
-                <button type="submit">Enter</button>
-                {error && <p style={{ color: "red" }}>{error}</p>}
-            </form>
-        );
+        return <AuthPage onAuthenticated={handleAuthenticated} />;
     }
 
     return (
         <div>
-            <h2>Welcome, {identity.name}</h2>
+            <header className="app-header">
+                <h2>Welcome, {identity.name}</h2>
+                <button type="button" onClick={handleLogOut}>Log out</button>
+            </header>
 
             <form onSubmit={handleCreate}>
                 <h3>Create item</h3>
-                <input value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} placeholder="unique key" />
+                <input value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} placeholder="Title" />
                 <select value={type} onChange={e => setType(e.target.value)}>
                     <option value="link">link</option>
                     <option value="note">note</option>
+                    <option value="image">image</option>
+                    <option value="video">video</option>
                 </select>
                 <input value={content} onChange={e => setContent(e.target.value)} placeholder="content / URL" />
                 <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="tags, comma separated" />

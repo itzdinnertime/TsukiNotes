@@ -17,20 +17,19 @@ public class AuthController {
         this.identityService = identityService;
     }
 
-    @PostMapping("/identity")
-    public Identity pickName(@RequestBody NameRequest request) {
-        return identityService.findOrCreate(request.getName());
+    @PostMapping("/signup")
+    public Identity signUp(@RequestBody SignUpRequest request) {
+        return identityService.signUp(request.name(), request.email(), request.password());
     }
 
-    public static class NameRequest {
-        private String name;
+    @PostMapping("/login")
+    public Identity logIn(@RequestBody LogInRequest request) {
+        return identityService.logIn(request.email(), request.password());
+    }
 
-        public String getName() {
-            return name;
-        }
+    public record SignUpRequest(String name, String email, String password) {
+    }
 
-        public void setName(String name) {
-            this.name = name;
-        }
+    public record LogInRequest(String email, String password) {
     }
 }
