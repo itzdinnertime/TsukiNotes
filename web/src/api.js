@@ -142,6 +142,17 @@ export async function logIn(email, password) {
     return identity;
 }
 
+/** Asks for a reset email. Succeeds whether or not the email has an account (by design). */
+export function requestPasswordReset(email) {
+    return apiFetch("/auth/password-reset/request", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+/** Sets a new password using the token from the emailed link. Logs the user out everywhere. */
+export async function resetPassword(token, password) {
+    await apiFetch("/auth/password-reset/confirm", { method: "POST", body: JSON.stringify({ token, password }) });
+    setToken(null); // the server ended every session, including any saved in this browser
+}
+
 export function getCurrentIdentity() {
     return apiFetch("/auth/me");
 }

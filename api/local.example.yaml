@@ -1,0 +1,35 @@
+# Template for private local settings.
+#
+#   1. Copy this file to api/local.yaml (git ignores local.yaml, so your password is never committed).
+#   2. Fill in your details below.
+#   3. Restart the API. Its startup output says where emails will go and whether it could connect.
+#
+# Anything in local.yaml overrides application.yaml.
+
+# ---- Send real emails through Gmail -------------------------------------------------------------
+#
+# Gmail needs an "app password", not your normal Google password:
+#   a. Turn on 2-Step Verification for the Google account: https://myaccount.google.com/security
+#   b. Create an app password:  https://myaccount.google.com/apppasswords
+#      (name it e.g. "TsukiNotes"). Google shows a 16-letter password once: copy it.
+#   c. Put your Gmail address and that app password below (spaces in it don't matter).
+#
+# Gmail limits personal accounts to roughly 500 emails a day, which is plenty for development.
+# For a public site, use a transactional email service (Resend, SendGrid, Amazon SES, ...)
+# instead; they also give you SMTP settings to put here.
+
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your.address@gmail.com
+    password: "abcd efgh ijkl mnop"
+    properties:
+      "[mail.smtp.auth]": true
+      "[mail.smtp.starttls.enable]": true
+      "[mail.smtp.starttls.required]": true
+
+app:
+  mail:
+    # Gmail only sends "from" your own address.
+    from: "TsukiNotes <your.address@gmail.com>"

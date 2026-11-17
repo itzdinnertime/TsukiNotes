@@ -34,3 +34,6 @@ build/
 
 ### Uploaded files ###
 uploads/
+
+### Private local settings (passwords) ###
+local.yaml

@@ -1,6 +1,10 @@
 spring:
   application:
     name: api
+  # Private, machine-specific settings (e.g. a real email account) go in api/local.yaml, which git
+  # ignores. Anything in it overrides this file. See api/local.example.yaml for a template.
+  config:
+    import: "optional:file:./local.yaml"
   datasource:
     url: jdbc:postgresql://localhost:5432/tsukinote
     username: tsukinote_user
@@ -9,6 +13,23 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 11MB
+  # Outgoing email (password resets). By default this is the local Mailpit server from
+  # docker-compose, which CATCHES every email instead of delivering it: nothing reaches a real
+  # inbox; read them at http://localhost:8025. To deliver to real inboxes (e.g. Gmail), put your
+  # provider's details in api/local.yaml (template: api/local.example.yaml) or set the
+  # environment variables MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      "[mail.smtp.auth]": ${MAIL_SMTP_AUTH:false}
+      "[mail.smtp.starttls.enable]": ${MAIL_STARTTLS:false}
+      "[mail.smtp.starttls.required]": ${MAIL_STARTTLS:false}
+      "[mail.smtp.connectiontimeout]": 10000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
 
 app:
     invite-token: tsuki-secret-6767
@@ -19,3 +40,12 @@ app:
         max-failures-per-email: 5
         max-failures-per-ip: 20
         window: 15m
+    # Where the web app runs; used to build the links in emails.
+    frontend-url: http://localhost:5173
+    mail:
+        # Must be an address your email provider lets you send from (for Gmail: your Gmail address).
+        from: ${MAIL_FROM:TsukiNotes <no-reply@tsukinotes.local>}
+    password-reset:
+        token-lifetime: 30m
+        # Reset emails one account can receive per hour (stops inbox flooding).
+        max-emails-per-hour: 3

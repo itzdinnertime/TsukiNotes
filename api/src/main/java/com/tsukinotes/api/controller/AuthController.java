@@ -3,6 +3,7 @@ package com.tsukinotes.api.controller;
 import com.tsukinotes.api.auth.AuthInterceptor;
 import com.tsukinotes.api.domain.Identity;
 import com.tsukinotes.api.service.IdentityService;
+import com.tsukinotes.api.service.PasswordResetService;
 import com.tsukinotes.api.service.SessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -19,10 +20,13 @@ public class AuthController {
 
     private final IdentityService identityService;
     private final SessionService sessionService;
+    private final PasswordResetService passwordResetService;
 
-    public AuthController(IdentityService identityService, SessionService sessionService) {
+    public AuthController(IdentityService identityService, SessionService sessionService,
+                          PasswordResetService passwordResetService) {
         this.identityService = identityService;
         this.sessionService = sessionService;
+        this.passwordResetService = passwordResetService;
     }
 
     @PostMapping("/signup")
@@ -37,6 +41,26 @@ public class AuthController {
         // proxy's trusted forwarded-for header instead, or every user will share the proxy's IP.
         Identity identity = identityService.logIn(request.email(), request.password(), httpRequest.getRemoteAddr());
         return new AuthResponse(sessionService.createSession(identity), identity);
+    }
+
+    /** Emails a reset link if the account exists. Always answers 204, so it doesn't reveal which emails exist. */
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<Void> requestPasswordReset(@RequestBody PasswordResetRequest request) {
+        passwordResetService.requestReset(request.email());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Sets a new password using the token from the emailed link. */
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(@RequestBody PasswordResetConfirm request) {
+        passwordResetService.resetPassword(request.token(), request.password());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record PasswordResetRequest(String email) {
+    }
+
+    public record PasswordResetConfirm(String token, String password) {
     }
 
     @GetMapping("/me")

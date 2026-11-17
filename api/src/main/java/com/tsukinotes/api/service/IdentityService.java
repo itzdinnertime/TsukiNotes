@@ -9,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 @Service
@@ -38,12 +39,7 @@ public class IdentityService {
         if (!EMAIL_PATTERN.matcher(cleanEmail).matches()) {
             throw badRequest("Please enter a valid email address");
         }
-        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
-            throw badRequest("Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
-        }
-        if (password.length() > MAX_PASSWORD_LENGTH) {
-            throw badRequest("Password must be at most " + MAX_PASSWORD_LENGTH + " characters");
-        }
+        validatePassword(password);
         if (identityRepository.existsByEmailIgnoreCase(cleanEmail)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "An account with that email already exists");
         }
@@ -53,6 +49,32 @@ public class IdentityService {
         identity.setEmail(cleanEmail);
         identity.setPasswordHash(passwordEncoder.encode(password));
         return identityRepository.save(identity);
+    }
+
+    /** Sets a new password (checked against the same rules as sign-up). */
+    public void changePassword(Identity identity, String newPassword) {
+        validatePassword(newPassword);
+        identity.setPasswordHash(passwordEncoder.encode(newPassword));
+        identityRepository.save(identity);
+    }
+
+    /** Finds the account for an email, if it exists and has a password (old name-only accounts don't). */
+    public Optional<Identity> findAccountByEmail(String email) {
+        return identityRepository.findByEmailIgnoreCase(normalizeEmail(email))
+                .filter(identity -> identity.getPasswordHash() != null);
+    }
+
+    private static void validatePassword(String password) {
+        if (password == null || password.length() < MIN_PASSWORD_LENGTH) {
+            throw badRequest("Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
+        }
+        if (password.length() > MAX_PASSWORD_LENGTH) {
+            throw badRequest("Password must be at most " + MAX_PASSWORD_LENGTH + " characters");
+        }
+    }
+
+    public static String normalizeEmail(String email) {
+        return email == null ? "" : email.trim().toLowerCase();
     }
 
     /**
@@ -92,9 +114,6 @@ public class IdentityService {
         return message;
     }
 
-    private static String normalizeEmail(String email) {
-        return email == null ? "" : email.trim().toLowerCase();
-    }
 
     private static ResponseStatusException badRequest(String message) {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);

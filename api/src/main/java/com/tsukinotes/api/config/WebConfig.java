@@ -19,6 +19,6 @@ public class WebConfig implements WebMvcConfigurer {
         // Every endpoint needs a valid session token except the ones that create a session.
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/**")
-                .excludePathPatterns("/auth/signup", "/auth/login", "/error");
+                .excludePathPatterns("/auth/signup", "/auth/login", "/auth/password-reset/**", "/error");
     }
 }

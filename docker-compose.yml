@@ -12,5 +12,15 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # Local "inbox" for development: catches every email the API sends (e.g. password resets)
+  # instead of delivering it. Read them at http://localhost:8025. Not for production.
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    container_name: tsukinote_mail
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP, used by the API
+      - "8025:8025"   # web inbox
+
 volumes:
   pgdata:
