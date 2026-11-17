@@ -1,17 +1,46 @@
 import { useState } from "react";
-import { createFolder, deleteFolder } from "./api";
+import { createFolder, deleteFolder, renameFolder } from "./api";
 
 /**
  * Shows "All files" plus the user's folders. Clicking one filters the file list;
- * folders can be created here, and the open folder can be deleted (its files are kept).
+ * folders can be created here, and the open folder can be renamed or deleted (its files are kept).
  */
 export default function FolderSection({ folders, selectedId, onSelect, onChanged }) {
     const [creating, setCreating] = useState(false);
     const [name, setName] = useState("");
+    const [renaming, setRenaming] = useState(false);
+    const [newName, setNewName] = useState("");
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
 
     const selected = folders.find(f => f.id === selectedId) ?? null;
+
+    function selectFolder(id) {
+        setRenaming(false);
+        setError("");
+        onSelect(id);
+    }
+
+    function startRename() {
+        setNewName(selected.name);
+        setRenaming(true);
+        setError("");
+    }
+
+    async function handleRename(e) {
+        e.preventDefault();
+        setBusy(true);
+        try {
+            await renameFolder(selected.id, newName);
+            setRenaming(false);
+            setError("");
+            onChanged();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setBusy(false);
+        }
+    }
 
     async function handleCreate(e) {
         e.preventDefault();
@@ -22,7 +51,7 @@ export default function FolderSection({ folders, selectedId, onSelect, onChanged
             setCreating(false);
             setError("");
             onChanged();
-            onSelect(folder.id);
+            selectFolder(folder.id);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -37,8 +66,7 @@ export default function FolderSection({ folders, selectedId, onSelect, onChanged
         setBusy(true);
         try {
             await deleteFolder(selected.id);
-            setError("");
-            onSelect(null);
+            selectFolder(null);
             onChanged();
         } catch (err) {
             setError(err.message);
@@ -83,7 +111,7 @@ export default function FolderSection({ folders, selectedId, onSelect, onChanged
                     type="button"
                     className={selectedId == null ? "folder-chip active" : "folder-chip"}
                     aria-pressed={selectedId == null}
-                    onClick={() => onSelect(null)}
+                    onClick={() => selectFolder(null)}
                 >
                     All files
                 </button>
@@ -93,7 +121,7 @@ export default function FolderSection({ folders, selectedId, onSelect, onChanged
                         type="button"
                         className={folder.id === selectedId ? "folder-chip active" : "folder-chip"}
                         aria-pressed={folder.id === selectedId}
-                        onClick={() => onSelect(folder.id)}
+                        onClick={() => selectFolder(folder.id)}
                     >
                         <FolderIcon />
                         {folder.name}
@@ -106,12 +134,34 @@ export default function FolderSection({ folders, selectedId, onSelect, onChanged
                 <p className="muted folder-hint">Create folders to group your files, for example one per class.</p>
             )}
 
-            {selected && (
+            {selected && renaming && (
+                <form className="new-folder-form rename-form" onSubmit={handleRename}>
+                    <input
+                        autoFocus
+                        required
+                        maxLength={100}
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        aria-label={`New name for ${selected.name}`}
+                    />
+                    <button type="submit" disabled={busy}>Save</button>
+                    <button type="button" className="secondary" onClick={() => { setRenaming(false); setError(""); }}>
+                        Cancel
+                    </button>
+                </form>
+            )}
+
+            {selected && !renaming && (
                 <div className="folder-actions">
                     <span className="muted">Showing files in <strong>{selected.name}</strong></span>
-                    <button type="button" className="link-button danger" onClick={handleDelete} disabled={busy}>
-                        Delete folder
-                    </button>
+                    <span className="folder-action-buttons">
+                        <button type="button" className="link-button" onClick={startRename} disabled={busy}>
+                            Rename
+                        </button>
+                        <button type="button" className="link-button danger" onClick={handleDelete} disabled={busy}>
+                            Delete folder
+                        </button>
+                    </span>
                 </div>
             )}
 

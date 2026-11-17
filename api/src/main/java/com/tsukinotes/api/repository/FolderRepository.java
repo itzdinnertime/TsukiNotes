@@ -33,6 +33,9 @@ public interface FolderRepository extends JpaRepository<Folder, Long> {
 
     boolean existsByIdentityIdAndNameIgnoreCase(Long identityId, String name);
 
+    /** For renames: is the name taken by one of the user's *other* folders? */
+    boolean existsByIdentityIdAndNameIgnoreCaseAndIdNot(Long identityId, String name, Long id);
+
     Optional<Folder> findByIdAndIdentityId(Long id, Long identityId);
 
     List<Folder> findByIdInAndIdentityId(Collection<Long> ids, Long identityId);
@@ -41,4 +44,17 @@ public interface FolderRepository extends JpaRepository<Folder, Long> {
     @Query(value = "INSERT INTO item_folders (item_id, folder_id) VALUES (:itemId, :folderId) ON CONFLICT DO NOTHING",
             nativeQuery = true)
     void addItemToFolder(@Param("itemId") Long itemId, @Param("folderId") Long folderId);
+
+    @Modifying
+    @Query(value = "DELETE FROM item_folders WHERE item_id = :itemId", nativeQuery = true)
+    void removeItemFromAllFolders(@Param("itemId") Long itemId);
+
+    /** Uploaded files in this folder that aren't in any other folder (deleting the folder would strand them). */
+    @Query(value = """
+            SELECT COUNT(*) FROM items i
+            JOIN item_folders f ON f.item_id = i.id AND f.folder_id = :folderId
+            WHERE i.stored_file_name IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM item_folders o WHERE o.item_id = i.id AND o.folder_id <> :folderId)
+            """, nativeQuery = true)
+    long countUploadsOnlyInFolder(@Param("folderId") Long folderId);
 }

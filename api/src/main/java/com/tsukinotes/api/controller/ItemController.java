@@ -15,9 +15,11 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -72,6 +74,25 @@ public class ItemController {
                            @RequestParam(value = "folderIds", required = false) List<Long> folderIds) {
         List<String> extraTags = tags == null ? List.of() : Arrays.asList(tags.split(","));
         return itemService.uploadFile(identity, file, title, extraTags, folderIds == null ? List.of() : folderIds);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteItem(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
+                                           @PathVariable Long id) {
+        itemService.deleteItem(identity, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Replaces the item's folders with exactly these (an empty list takes it out of every folder). */
+    @PutMapping("/{id}/folders")
+    public ResponseEntity<Void> setFolders(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
+                                           @PathVariable Long id,
+                                           @RequestBody SetFoldersRequest request) {
+        itemService.setItemFolders(identity, id, request.folderIds() == null ? List.of() : request.folderIds());
+        return ResponseEntity.noContent().build();
+    }
+
+    public record SetFoldersRequest(List<Long> folderIds) {
     }
 
     @GetMapping("/{id}/file")

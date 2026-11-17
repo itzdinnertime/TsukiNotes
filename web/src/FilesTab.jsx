@@ -91,7 +91,6 @@ export default function FilesTab() {
         refresh();
     }
 
-    const folderNameById = new Map(folders.map(f => [f.id, f.name]));
     const selectedFolder = folders.find(f => f.id === selectedFolderId);
     const filtering = query.trim() !== "" || selectedFolderId != null;
     const listTitle = selectedFolder ? selectedFolder.name : "All files";
@@ -143,11 +142,7 @@ export default function FilesTab() {
             {items && items.length > 0 && (
                 <ul>
                     {items.map(item => (
-                        <ItemCard
-                            key={item.id}
-                            item={item}
-                            folderNames={(item.folderIds ?? []).map(id => folderNameById.get(id)).filter(Boolean)}
-                        />
+                        <ItemCard key={item.id} item={item} folders={folders} onChanged={refresh} />
                     ))}
                 </ul>
             )}

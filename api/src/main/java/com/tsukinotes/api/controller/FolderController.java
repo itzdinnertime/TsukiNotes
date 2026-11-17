@@ -8,6 +8,7 @@ import com.tsukinotes.api.service.FolderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -37,6 +38,14 @@ public class FolderController {
     public Folder createFolder(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
                                @RequestBody CreateFolderRequest request) {
         return folderService.createFolder(identity, request.name());
+    }
+
+    /** Renames a folder. Body: { "name": "..." } */
+    @PatchMapping("/{id}")
+    public Folder renameFolder(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
+                               @PathVariable Long id,
+                               @RequestBody CreateFolderRequest request) {
+        return folderService.renameFolder(identity, id, request.name());
     }
 
     @DeleteMapping("/{id}")

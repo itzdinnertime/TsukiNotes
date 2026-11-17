@@ -89,8 +89,21 @@ export function createFolder(name) {
     return apiFetch("/folders", { method: "POST", body: JSON.stringify({ name }) });
 }
 
+export function renameFolder(id, name) {
+    return apiFetch(`/folders/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+}
+
 export function deleteFolder(id) {
     return apiFetch(`/folders/${id}`, { method: "DELETE" });
+}
+
+export function deleteItem(id) {
+    return apiFetch(`/items/${id}`, { method: "DELETE" });
+}
+
+/** Sets exactly which folders an item is in. */
+export function setItemFolders(id, folderIds) {
+    return apiFetch(`/items/${id}/folders`, { method: "PUT", body: JSON.stringify({ folderIds }) });
 }
 
 /** Downloads an uploaded file (with the session token, which <img src> can't send) as a Blob. */

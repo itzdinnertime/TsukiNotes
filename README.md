@@ -5,7 +5,8 @@ A personal notes app for saving links, notes, images, text files and code files,
 - **Accounts:** sign up and log in with an email and password.
 - **Uploads:** upload images, text files and code files. Each upload is tagged automatically by type (`image`, `text`, or `code` + the language, e.g. `python`).
 - **Links and notes:** save a URL or a short note with your own tags.
-- **Folders:** group files into folders (e.g. one per class) and choose folders when uploading. A file can be in several folders.
+- **Folders:** group files into folders (e.g. one per class), rename and delete them, and move items between them. A file can be in several folders. **Every uploaded file must always be in at least one folder.**
+- **Delete items:** deleting an uploaded file also removes it from disk.
 
 The home screen has two tabs:
 
@@ -101,9 +102,9 @@ web/                         React frontend
     HomeScreen.jsx           Header and tabs
     FilesTab.jsx             My files tab: search bar, item list, add link/note form
     UploadSection.jsx        File upload box, with folder picker
-    FolderSection.jsx        Folder list: filter, create, delete
+    FolderSection.jsx        Folder list: filter, create, rename, delete
     SearchTab.jsx            Search tab (all-tags search)
-    ItemCard.jsx             How one item is displayed (with its folders and tags)
+    ItemCard.jsx             One item: preview, folders, tags, "Move to folders" and "Delete"
     FilePreview.jsx          Image / text preview and download for uploads
     format.js                Small display helpers (file sizes)
 docker-compose.yml           PostgreSQL for local development
@@ -143,9 +144,12 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 | `POST` | `/items` | Save a link or note. Body: `{ uniqueKey, type, content, tags }` |
 | `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags`, optional `folderIds` (repeat the field for several) |
 | `GET` | `/items/{id}/file` | Download an uploaded file |
+| `DELETE` | `/items/{id}` | Delete an item (and its file, for uploads) |
+| `PUT` | `/items/{id}/folders` | Set exactly which folders an item is in. Body: `{ folderIds: [...] }`. This is how items are moved |
 | `GET` | `/folders` | Your folders, alphabetically, each with `itemCount` |
 | `POST` | `/folders` | Create a folder. Body: `{ name }`. Names are unique per user, ignoring capitals, up to 100 characters |
-| `DELETE` | `/folders/{id}` | Delete a folder (the files in it are kept) |
+| `PATCH` | `/folders/{id}` | Rename a folder. Body: `{ name }` |
+| `DELETE` | `/folders/{id}` | Delete a folder (the files in it are kept). Refused if an uploaded file is only in this folder |
 | `GET` | `/search?tags=a&tags=b` | Your items that have **all** the given tags (exact names) |
 
 ## File uploads
@@ -162,6 +166,18 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 - Uploading a file with a title you already use saves it as "title (2)", "title (3)", and so on.
 - When a folder is open in My files, it's pre-selected in the upload's folder picker.
 - Uploading into a folder that isn't yours is rejected, and nothing is saved.
+
+**Every upload must always be in a folder** (images, text and code alike). The server enforces this everywhere, not just in the form:
+
+| Action | Result for an uploaded file |
+|---|---|
+| Upload with no folder chosen | Rejected: "Uploaded files must be put in at least one folder" |
+| Remove it from its last folder | Rejected with the same message |
+| Delete the only folder it's in | Rejected: "1 file is only in "X". Move it to another folder or delete it first." |
+
+Links and notes saved through **+ Add link or note** aren't uploads, so they can be in no folder.
+
+Deleting an item asks for confirmation once, then the card disappears immediately and, for uploads, the file is removed from disk.
 - To support a new extension, add it to [`FileClassifier.java`](api/src/main/java/com/tsukinotes/api/files/FileClassifier.java) **and** to `ACCEPTED` in [`UploadSection.jsx`](web/src/UploadSection.jsx).
 
 ## Database changes
@@ -201,10 +217,8 @@ The API was probably started from a different folder than before, so it's lookin
 
 ## Not built yet
 
-- Moving existing files into or out of folders (folders can only be chosen when uploading)
-- Choosing folders for links and notes
-- Renaming folders
-- Editing and deleting items
+- Choosing folders when creating a link or note (use **Move to folders** afterwards)
+- Editing an item's title or tags
 - Searching inside the text of uploaded files
 - Password reset by email (the "Forgot your password?" page is a placeholder)
 - Limits on repeated failed login attempts

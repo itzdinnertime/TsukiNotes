@@ -58,11 +58,16 @@ export default function UploadSection({ folders, currentFolderId, onUploaded }) 
             setError("Choose a file first");
             return;
         }
+        // Ignore folders that were deleted while the form was open.
+        const validFolderIds = folderIds.filter(id => folders.some(f => f.id === id));
+        // Every upload must go in a folder (the server enforces this too).
+        if (validFolderIds.length === 0) {
+            setError("Choose at least one folder for this file");
+            return;
+        }
         setUploading(true);
         try {
             const tags = tagsInput.split(",").map(t => t.trim()).filter(Boolean);
-            // Ignore folders that were deleted while the form was open.
-            const validFolderIds = folderIds.filter(id => folders.some(f => f.id === id));
             await uploadFile(file, title.trim(), tags, validFolderIds);
             reset();
             onUploaded();
@@ -108,9 +113,14 @@ export default function UploadSection({ folders, currentFolderId, onUploaded }) 
                     <input value={tagsInput} onChange={e => setTagsInput(e.target.value)}
                            placeholder="Extra tags, comma separated (the file type is tagged automatically)" />
                     <fieldset className="folder-picker">
-                        <legend>Add to folders</legend>
+                        <legend>
+                            Add to folders <span className="required-note">(required, choose at least one)</span>
+                        </legend>
                         {folders.length === 0 ? (
-                            <span className="muted">No folders yet. Create one in the Folders section below.</span>
+                            <span className="muted">
+                                No folders yet. Every upload goes in a folder, so create one in the
+                                Folders section below first.
+                            </span>
                         ) : (
                             <div className="folder-list">
                                 {folders.map(folder => {

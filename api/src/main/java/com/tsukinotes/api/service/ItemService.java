@@ -84,6 +84,9 @@ public class ItemService {
             throw new UncheckedIOException("Could not read uploaded file", e);
         }
         FileKind kind = FileClassifier.classify(originalName, bytes);
+        if (folderIds == null || folderIds.isEmpty()) {
+            throw uploadsNeedAFolder();
+        }
 
         String storedName = fileStorageService.save(bytes);
         // If anything below fails, the transaction rolls back; remove the file so it isn't orphaned.
@@ -120,6 +123,45 @@ public class ItemService {
         // Throws (rolling everything back, including the saved file) if a folder isn't the user's.
         folderService.addItemToFolders(identity, item.getId(), folderIds);
         return item;
+    }
+
+    /** Deletes one of the user's items, and its file from disk once the deletion is committed. */
+    @Transactional
+    public void deleteItem(Identity identity, Long itemId) {
+        Item item = findOwned(identity, itemId);
+        String storedName = item.getStoredFileName();
+
+        itemRepository.deleteTagLinks(item.getId());
+        itemRepository.delete(item); // folder links go with it (ON DELETE CASCADE)
+
+        if (storedName != null) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    fileStorageService.delete(storedName);
+                }
+            });
+        }
+    }
+
+    /** Sets exactly which folders an item is in (this is how items are moved between folders). */
+    @Transactional
+    public void setItemFolders(Identity identity, Long itemId, List<Long> folderIds) {
+        Item item = findOwned(identity, itemId);
+        if (item.getStoredFileName() != null && (folderIds == null || folderIds.isEmpty())) {
+            throw uploadsNeedAFolder();
+        }
+        folderService.replaceItemFolders(identity, item.getId(), folderIds);
+    }
+
+    private Item findOwned(Identity identity, Long itemId) {
+        return itemRepository.findByIdAndIdentityId(itemId, identity.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
+    }
+
+    /** Every uploaded file (image, text or code) must always be in at least one folder. */
+    private static ResponseStatusException uploadsNeedAFolder() {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded files must be put in at least one folder");
     }
 
     /** Finds one of this user's uploaded files. Other users' items look like they don't exist. */

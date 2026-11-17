@@ -31,16 +31,9 @@ public class FolderService {
     }
 
     public Folder createFolder(Identity identity, String name) {
-        String clean = name == null ? "" : name.trim();
-        if (clean.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please enter a folder name");
-        }
-        if (clean.length() > MAX_NAME_LENGTH) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Folder names can be at most " + MAX_NAME_LENGTH + " characters");
-        }
+        String clean = validName(name);
         if (folderRepository.existsByIdentityIdAndNameIgnoreCase(identity.getId(), clean)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "You already have a folder called \"" + clean + "\"");
+            throw nameTaken(clean);
         }
 
         Folder folder = new Folder();
@@ -50,27 +43,84 @@ public class FolderService {
         return folderRepository.save(folder);
     }
 
-    /** Deletes the folder only; the items in it stay (the database removes the links). */
+    @Transactional
+    public Folder renameFolder(Identity identity, Long folderId, String name) {
+        Folder folder = findOwned(identity, folderId);
+        String clean = validName(name);
+        // Excluding this folder lets you change only the capitals, e.g. "cs 101" -> "CS 101".
+        if (folderRepository.existsByIdentityIdAndNameIgnoreCaseAndIdNot(identity.getId(), clean, folderId)) {
+            throw nameTaken(clean);
+        }
+        folder.setName(clean);
+        return folder;
+    }
+
+    /**
+     * Deletes the folder only; the items in it stay (the database removes the links).
+     * Refused if it would leave an uploaded file in no folder, since uploads must always be in one.
+     */
     @Transactional
     public void deleteFolder(Identity identity, Long folderId) {
-        Folder folder = folderRepository.findByIdAndIdentityId(folderId, identity.getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folder not found"));
+        Folder folder = findOwned(identity, folderId);
+        long stranded = folderRepository.countUploadsOnlyInFolder(folderId);
+        if (stranded > 0) {
+            String files = stranded == 1 ? "1 file is" : stranded + " files are";
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    files + " only in \"" + folder.getName() + "\". Move "
+                            + (stranded == 1 ? "it" : "them") + " to another folder or delete "
+                            + (stranded == 1 ? "it" : "them") + " first.");
+        }
         folderRepository.delete(folder);
     }
 
-    /** Puts an item into folders, after checking every folder belongs to this user. */
+    /** Puts an item into folders (keeping any it's already in), after checking every folder belongs to this user. */
     @Transactional
     public void addItemToFolders(Identity identity, Long itemId, Collection<Long> folderIds) {
+        for (Long folderId : ownedFolderIds(identity, folderIds)) {
+            folderRepository.addItemToFolder(itemId, folderId);
+        }
+    }
+
+    /** Makes the item's folders exactly this set. Caller must have checked the item belongs to the user. */
+    @Transactional
+    public void replaceItemFolders(Identity identity, Long itemId, Collection<Long> folderIds) {
+        Set<Long> owned = ownedFolderIds(identity, folderIds);
+        folderRepository.removeItemFromAllFolders(itemId);
+        for (Long folderId : owned) {
+            folderRepository.addItemToFolder(itemId, folderId);
+        }
+    }
+
+    private Set<Long> ownedFolderIds(Identity identity, Collection<Long> folderIds) {
         if (folderIds == null || folderIds.isEmpty()) {
-            return;
+            return Set.of();
         }
         Set<Long> unique = new LinkedHashSet<>(folderIds);
         List<Folder> owned = folderRepository.findByIdInAndIdentityId(unique, identity.getId());
         if (owned.size() != unique.size()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "One of the selected folders doesn't exist");
         }
-        for (Long folderId : unique) {
-            folderRepository.addItemToFolder(itemId, folderId);
+        return unique;
+    }
+
+    private Folder findOwned(Identity identity, Long folderId) {
+        return folderRepository.findByIdAndIdentityId(folderId, identity.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Folder not found"));
+    }
+
+    private static String validName(String name) {
+        String clean = name == null ? "" : name.trim();
+        if (clean.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please enter a folder name");
         }
+        if (clean.length() > MAX_NAME_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Folder names can be at most " + MAX_NAME_LENGTH + " characters");
+        }
+        return clean;
+    }
+
+    private static ResponseStatusException nameTaken(String name) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, "You already have a folder called \"" + name + "\"");
     }
 }
