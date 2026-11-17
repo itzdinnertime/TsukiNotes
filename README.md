@@ -81,8 +81,18 @@ Each run starts a throwaway PostgreSQL 16 in Docker (via [Testcontainers](https:
 | `PasswordResetTest` | The email and link, one-time links, logout everywhere, newest-link-only, 3 emails per hour (also under simultaneous requests), expired and fake links |
 | `UploadTest` | Automatic tags, fake/binary/unsupported files rejected without leaving files behind, folder required, files served back safely |
 | `FoldersAndItemsTest` | Folders (names, rename, delete rules), moving and deleting items, both searches, and that users can never see or change each other's things |
+| `SearchViewTest` | The search view is materialized with a GIN index on tags, and never goes stale (folder deletes, direct SQL changes, rolled-back uploads) |
 | `FileClassifierTest` | Every allowed extension and every rejection, without a database |
 | `ApiApplicationTests` | The app starts and all migrations apply to an empty database |
+
+**Search benchmark** (skipped in normal runs; takes about a minute):
+
+```bash
+cd api
+./mvnw test -Dtest=SearchBenchmarkTest -Dbenchmark=true
+```
+
+It fills a throwaway database with 100,000 items (50 tags, 3 per item), runs the app's multi-tag AND search 30 times against the old plain view and the materialized view, and prints the median PostgreSQL execution times, the cost of a refresh, and both query plans. The report is also saved to `api/target/search-benchmark.txt`. On a Windows laptop with Docker Desktop it measured about **300 ms → 10.5 ms (~28×)** for the search, with each write paying about **0.9 s** to refresh the view.
 
 **Frontend:**
 
@@ -178,7 +188,7 @@ docker-compose.yml           PostgreSQL and Mailpit (development mail server) fo
 | `items` | Links, notes and uploads. For uploads, also the stored file name, original file name, content type and size |
 | `tags`, `item_tags` | Tag names, and which items have which tags |
 | `folders`, `item_folders` | Each user's folders, and which items are in which folders |
-| `item_search_view` | A database view joining each item with its tags and folder IDs; the item list and both searches read from it |
+| `item_search_view` | A **materialized** view: each item with its tags (as an array) and folder IDs; the item list and both searches read from it. A GIN index on `tags` makes multi-tag AND search (`tags @> '{a,b}'`) an index lookup. Database triggers refresh it once when any change to items, tags or folders commits, in the same transaction, so a search right after an upload always finds it |
 
 Deleting a folder removes its `item_folders` rows only; the items stay.
 
@@ -267,9 +277,9 @@ Deleting an item asks for confirmation once, then the card disappears immediatel
 
 ## Database changes
 
-Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V12__add_password_reset_tokens.sql`, so the next would be `V13__describe_change.sql`); it runs automatically the next time the API starts.
+Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V13__materialize_item_search_view.sql`, so the next would be `V14__describe_change.sql`); it runs automatically the next time the API starts.
 
-If you change `item_search_view`, drop and recreate it in the migration (see `V10__add_folders.sql`), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java) to match.
+If you change `item_search_view`, drop and recreate it in the migration with `DROP MATERIALIZED VIEW` / `CREATE MATERIALIZED VIEW`, recreate its three indexes (the unique one on `id` is required by the refresh), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java) to match.
 
 ## Troubleshooting
 
