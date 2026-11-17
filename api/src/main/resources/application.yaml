@@ -14,3 +14,8 @@ app:
     invite-token: tsuki-secret-6767
     # Where uploaded files are kept, relative to the directory the API is started from.
     storage-dir: uploads
+    # Failed logins allowed within the window before logins are paused.
+    login-limits:
+        max-failures-per-email: 5
+        max-failures-per-ip: 20
+        window: 15m

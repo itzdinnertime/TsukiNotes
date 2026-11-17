@@ -63,8 +63,9 @@ public class ItemController {
     }
 
     /**
-     * Multipart upload: "file" (required); optional "title", comma-separated "tags",
-     * and "folderIds" (repeat the field, or comma-separate) for the folders to put it in.
+     * Multipart upload: "file" and at least one "folderIds" (repeat the field, or comma-separate);
+     * optional "title" and comma-separated "tags". The folder parameter isn't marked required here
+     * so that a missing one gets the service's clear "must be put in at least one folder" message.
      */
     @PostMapping(path = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Item uploadFile(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,

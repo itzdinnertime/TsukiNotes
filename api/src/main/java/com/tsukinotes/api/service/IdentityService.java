@@ -1,5 +1,6 @@
 package com.tsukinotes.api.service;
 
+import com.tsukinotes.api.auth.LoginAttemptService;
 import com.tsukinotes.api.domain.Identity;
 import com.tsukinotes.api.repository.IdentityRepository;
 import org.springframework.http.HttpStatus;
@@ -19,10 +20,12 @@ public class IdentityService {
     private static final int MAX_PASSWORD_LENGTH = 72;
 
     private final IdentityRepository identityRepository;
+    private final LoginAttemptService loginAttemptService;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public IdentityService(IdentityRepository identityRepository) {
+    public IdentityService(IdentityRepository identityRepository, LoginAttemptService loginAttemptService) {
         this.identityRepository = identityRepository;
+        this.loginAttemptService = loginAttemptService;
     }
 
     public Identity signUp(String name, String email, String password) {
@@ -52,19 +55,41 @@ public class IdentityService {
         return identityRepository.save(identity);
     }
 
-    public Identity logIn(String email, String password) {
-        Identity identity = identityRepository.findByEmailIgnoreCase(normalizeEmail(email))
-                .orElse(null);
+    /**
+     * Checks the email and password, enforcing the failed-attempt limits.
+     * A locked-out email or IP is refused before the password is even checked,
+     * so guessing can't continue during a lockout.
+     */
+    public Identity logIn(String email, String password, String ipAddress) {
+        String cleanEmail = normalizeEmail(email);
+        loginAttemptService.checkAllowed(cleanEmail, ipAddress);
+
+        Identity identity = identityRepository.findByEmailIgnoreCase(cleanEmail).orElse(null);
 
         if (identity == null
                 || identity.getPasswordHash() == null
                 || password == null
                 || !passwordEncoder.matches(password, identity.getPasswordHash())) {
-            // Same message either way so we don't reveal which emails have accounts.
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Incorrect email or password");
+            int left = loginAttemptService.recordFailure(cleanEmail, ipAddress);
+            // Same message whether or not the account exists, so we don't reveal which emails have accounts.
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, failureMessage(left));
         }
 
+        loginAttemptService.clearFailures(cleanEmail);
         return identity;
+    }
+
+    private String failureMessage(int attemptsLeft) {
+        String message = "Incorrect email or password";
+        long minutes = loginAttemptService.getWindow().toMinutes();
+        if (attemptsLeft == 0) {
+            return message + ". Too many failed attempts: try again in " + minutes + " minutes.";
+        }
+        if (attemptsLeft <= 2) {
+            return message + ". " + attemptsLeft + (attemptsLeft == 1 ? " attempt" : " attempts")
+                    + " left before logins are paused for " + minutes + " minutes.";
+        }
+        return message;
     }
 
     private static String normalizeEmail(String email) {

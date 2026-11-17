@@ -32,8 +32,10 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public AuthResponse logIn(@RequestBody LogInRequest request) {
-        Identity identity = identityService.logIn(request.email(), request.password());
+    public AuthResponse logIn(@RequestBody LogInRequest request, HttpServletRequest httpRequest) {
+        // The direct connection's address. If this is ever put behind a reverse proxy, use the
+        // proxy's trusted forwarded-for header instead, or every user will share the proxy's IP.
+        Identity identity = identityService.logIn(request.email(), request.password(), httpRequest.getRemoteAddr());
         return new AuthResponse(sessionService.createSession(identity), identity);
     }
 

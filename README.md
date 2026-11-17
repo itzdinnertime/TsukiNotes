@@ -2,7 +2,7 @@
 
 A personal notes app for saving links, notes, images, text files and code files, organising them into folders, and finding them again.
 
-- **Accounts:** sign up and log in with an email and password.
+- **Accounts:** sign up and log in with an email and password. Repeated failed logins are paused for 15 minutes.
 - **Uploads:** upload images, text files and code files. Each upload is tagged automatically by type (`image`, `text`, or `code` + the language, e.g. `python`).
 - **Links and notes:** save a URL or a short note with your own tags.
 - **Folders:** group files into folders (e.g. one per class), rename and delete them, and move items between them. A file can be in several folders. **Every uploaded file must always be in at least one folder.**
@@ -73,6 +73,9 @@ Backend settings are in [`api/src/main/resources/application.yaml`](api/src/main
 | `app.invite-token` | `tsuki-secret-6767` | Required in the `X-Invite-Token` header on every request |
 | `app.storage-dir` | `uploads` | Where uploaded files are stored |
 | `spring.servlet.multipart.max-file-size` | `10MB` | Upload size limit |
+| `app.login-limits.max-failures-per-email` | `5` | Failed logins allowed per email within the window |
+| `app.login-limits.max-failures-per-ip` | `20` | Failed logins allowed per IP address within the window, across all emails |
+| `app.login-limits.window` | `15m` | How far back failed logins are counted |
 
 The frontend's API address and invite token are at the top of [`web/src/api.js`](web/src/api.js).
 The allowed frontend origin (`http://localhost:5173`) is set in [`CorsConfig.java`](api/src/main/java/com/tsukinotes/api/config/CorsConfig.java).
@@ -84,7 +87,7 @@ The allowed frontend origin (`http://localhost:5173`) is set in [`CorsConfig.jav
 ```
 api/                         Spring Boot backend
   src/main/java/com/tsukinotes/api/
-    auth/                    Invite-token filter, session-token check (AuthInterceptor)
+    auth/                    Invite-token filter, session-token check (AuthInterceptor), failed-login limits (LoginAttemptService)
     config/                  CORS, error handling, which routes need a login
     controller/              REST endpoints (auth, items, folders, search)
     domain/                  JPA entities
@@ -116,6 +119,7 @@ docker-compose.yml           PostgreSQL for local development
 |---|---|
 | `identities` | User accounts: name, email, bcrypt password hash |
 | `sessions` | Login sessions: user, SHA-256 hash of the token, expiry |
+| `login_failures` | Recent failed logins (email, IP address, time), used for the login limits |
 | `items` | Links, notes and uploads. For uploads, also the stored file name, original file name, content type and size |
 | `tags`, `item_tags` | Tag names, and which items have which tags |
 | `folders`, `item_folders` | Each user's folders, and which items are in which folders |
@@ -130,6 +134,17 @@ Deleting a folder removes its `item_folders` rows only; the items stay.
 3. The server looks the token up in the `sessions` table to see who is asking. Only a SHA-256 hash of each token is stored. Sessions last 30 days.
 4. `POST /auth/logout` deletes the session, so the token stops working immediately.
 
+### Failed login limits
+
+Failed logins are recorded in the `login_failures` table and counted over the last 15 minutes:
+
+- **Per email:** after 5 failures, logins for that email are paused. The login page warns when 2 and 1 attempts are left.
+- **Per IP address:** after 20 failures from one address (across any emails), logins from it are paused. This stops someone trying one password against many accounts.
+- While paused, the server answers `429 Too Many Requests` with a `Retry-After` header **before checking the password**, so even the right password is refused until the pause ends.
+- The limits apply the same way whether or not the email has an account, so they don't reveal which emails are registered.
+- A successful login clears that email's failures. Rows older than a day are deleted automatically.
+- The IP is the direct connection's address. If the API is ever put behind a reverse proxy, change [`AuthController.java`](api/src/main/java/com/tsukinotes/api/controller/AuthController.java) to use the proxy's forwarded address, or every user will share one IP.
+
 ## API
 
 Every request needs the `X-Invite-Token` header. Every endpoint except signup and login also needs `Authorization: Bearer <token>`.
@@ -137,12 +152,12 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/auth/signup` | Create an account. Body: `{ name, email, password }`. Returns `{ token, identity }` |
-| `POST` | `/auth/login` | Log in. Body: `{ email, password }`. Returns `{ token, identity }` |
+| `POST` | `/auth/login` | Log in. Body: `{ email, password }`. Returns `{ token, identity }`, or `429` after too many failures (see above) |
 | `GET` | `/auth/me` | The logged-in user |
 | `POST` | `/auth/logout` | End the current session |
 | `GET` | `/items?q=&folderId=` | Your items, newest first. Optional `q` matches part of a title, filename, link/note text or tag (ignoring capitals); optional `folderId` limits to one folder. Each item includes its `tags` and `folderIds` |
 | `POST` | `/items` | Save a link or note. Body: `{ uniqueKey, type, content, tags }` |
-| `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags`, optional `folderIds` (repeat the field for several) |
+| `POST` | `/items/upload` | Upload a file (multipart): `file` and **at least one** `folderIds` (repeat the field for several), plus optional `title` and comma-separated `tags` |
 | `GET` | `/items/{id}/file` | Download an uploaded file |
 | `DELETE` | `/items/{id}` | Delete an item (and its file, for uploads) |
 | `PUT` | `/items/{id}/folders` | Set exactly which folders an item is in. Body: `{ folderIds: [...] }`. This is how items are moved |
@@ -166,6 +181,7 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 - Uploading a file with a title you already use saves it as "title (2)", "title (3)", and so on.
 - When a folder is open in My files, it's pre-selected in the upload's folder picker.
 - Uploading into a folder that isn't yours is rejected, and nothing is saved.
+- To support a new extension, add it to [`FileClassifier.java`](api/src/main/java/com/tsukinotes/api/files/FileClassifier.java) **and** to `ACCEPTED` in [`UploadSection.jsx`](web/src/UploadSection.jsx).
 
 **Every upload must always be in a folder** (images, text and code alike). The server enforces this everywhere, not just in the form:
 
@@ -178,11 +194,10 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 Links and notes saved through **+ Add link or note** aren't uploads, so they can be in no folder.
 
 Deleting an item asks for confirmation once, then the card disappears immediately and, for uploads, the file is removed from disk.
-- To support a new extension, add it to [`FileClassifier.java`](api/src/main/java/com/tsukinotes/api/files/FileClassifier.java) **and** to `ACCEPTED` in [`UploadSection.jsx`](web/src/UploadSection.jsx).
 
 ## Database changes
 
-Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V10__add_folders.sql`, so the next would be `V11__describe_change.sql`); it runs automatically the next time the API starts.
+Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V11__add_login_failures.sql`, so the next would be `V12__describe_change.sql`); it runs automatically the next time the API starts.
 
 If you change `item_search_view`, drop and recreate it in the migration (see `V10__add_folders.sql`), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java) to match.
 
@@ -212,6 +227,13 @@ The API isn't running or isn't reachable at `http://localhost:8080`.
 **The API can't connect to the database**
 Make sure Docker Desktop is running, then run `docker compose up -d`.
 
+**"Too many failed login attempts" while developing locally**
+Wait for the pause to end, or clear the recorded failures:
+
+```bash
+docker exec tsukinote_db psql -U tsukinote_user -d tsukinote -c "DELETE FROM login_failures"
+```
+
 **Uploaded files show "Couldn't load file"**
 The API was probably started from a different folder than before, so it's looking in a different `uploads/` directory. Start it from `api/`.
 
@@ -220,6 +242,6 @@ The API was probably started from a different folder than before, so it's lookin
 - Choosing folders when creating a link or note (use **Move to folders** afterwards)
 - Editing an item's title or tags
 - Searching inside the text of uploaded files
-- Password reset by email (the "Forgot your password?" page is a placeholder)
-- Limits on repeated failed login attempts
+- Password reset by email (the "Forgot your password?" page is a placeholder) and email verification
+- Reading the database password and invite token from environment variables instead of the code
 - Automated tests
