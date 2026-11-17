@@ -63,16 +63,34 @@ async function request(path, options = {}) {
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-export function listItems() {
-    return apiFetch("/items");
+/** The user's items. `query` matches title, filename or tag; `folderId` limits to one folder. */
+export function listItems({ query = "", folderId = null } = {}) {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (folderId != null) params.set("folderId", folderId);
+    const qs = params.toString();
+    return apiFetch(qs ? `/items?${qs}` : "/items");
 }
 
-export function uploadFile(file, title, tags) {
+export function uploadFile(file, title, tags, folderIds = []) {
     const form = new FormData();
     form.append("file", file);
     if (title) form.append("title", title);
     if (tags.length > 0) form.append("tags", tags.join(","));
+    folderIds.forEach(id => form.append("folderIds", id));
     return apiFetch("/items/upload", { method: "POST", body: form });
+}
+
+export function listFolders() {
+    return apiFetch("/folders");
+}
+
+export function createFolder(name) {
+    return apiFetch("/folders", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export function deleteFolder(id) {
+    return apiFetch(`/folders/${id}`, { method: "DELETE" });
 }
 
 /** Downloads an uploaded file (with the session token, which <img src> can't send) as a Blob. */

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { createItem, listItems } from "./api";
+import { createItem, listFolders, listItems } from "./api";
+import FolderSection from "./FolderSection";
 import ItemCard from "./ItemCard";
 import UploadSection from "./UploadSection";
 
@@ -46,37 +47,78 @@ function AddItemForm({ onCreated, onCancel }) {
     );
 }
 
+const SEARCH_DELAY_MS = 250;
+
 export default function FilesTab() {
     const [items, setItems] = useState(null);
+    const [folders, setFolders] = useState([]);
+    const [selectedFolderId, setSelectedFolderId] = useState(null);
+    const [query, setQuery] = useState("");
     const [error, setError] = useState("");
     const [adding, setAdding] = useState(false);
-
-    function loadItems() {
-        return listItems()
-            .then(found => {
-                setItems(found);
-                setError("");
-            })
-            .catch(err => setError(err.message));
-    }
+    // Bumped after any change (upload, new folder, ...) to re-fetch items and folder counts.
+    const [version, setVersion] = useState(0);
+    const refresh = () => setVersion(v => v + 1);
 
     useEffect(() => {
-        listItems()
-            .then(setItems)
-            .catch(err => setError(err.message));
-    }, []);
+        let cancelled = false;
+        listFolders()
+            .then(found => { if (!cancelled) setFolders(found); })
+            .catch(err => { if (!cancelled) setError(err.message); });
+        return () => { cancelled = true; };
+    }, [version]);
+
+    useEffect(() => {
+        let cancelled = false;
+        // Wait for a pause in typing before searching; switching folders loads right away.
+        const timer = setTimeout(() => {
+            listItems({ query, folderId: selectedFolderId })
+                .then(found => {
+                    if (cancelled) return;
+                    setItems(found);
+                    setError("");
+                })
+                .catch(err => { if (!cancelled) setError(err.message); });
+        }, query.trim() ? SEARCH_DELAY_MS : 0);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [query, selectedFolderId, version]);
 
     function handleCreated() {
         setAdding(false);
-        loadItems();
+        refresh();
     }
+
+    const folderNameById = new Map(folders.map(f => [f.id, f.name]));
+    const selectedFolder = folders.find(f => f.id === selectedFolderId);
+    const filtering = query.trim() !== "" || selectedFolderId != null;
+    const listTitle = selectedFolder ? selectedFolder.name : "All files";
 
     return (
         <section>
-            <UploadSection onUploaded={loadItems} />
+            <UploadSection folders={folders} currentFolderId={selectedFolderId} onUploaded={refresh} />
+
+            <div className="files-search">
+                <input
+                    type="search"
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search your files by title, filename or tag"
+                    aria-label="Search your files"
+                />
+            </div>
+
+            <FolderSection
+                folders={folders}
+                selectedId={selectedFolderId}
+                onSelect={setSelectedFolderId}
+                onChanged={refresh}
+            />
 
             <div className="section-header">
-                <h3>My files{items ? ` (${items.length})` : ""}</h3>
+                <h3>{listTitle}{items ? ` (${items.length})` : ""}</h3>
                 {!adding && (
                     <button type="button" className="secondary" onClick={() => setAdding(true)}>
                         + Add link or note
@@ -90,11 +132,23 @@ export default function FilesTab() {
 
             {items === null && !error && <p className="muted">Loading…</p>}
             {items && items.length === 0 && (
-                <p className="empty">You haven't added anything yet.</p>
+                <p className="empty">
+                    {query.trim()
+                        ? `Nothing matches "${query.trim()}"${selectedFolder ? ` in ${selectedFolder.name}` : ""}.`
+                        : filtering
+                            ? "This folder is empty. Choose it when uploading to add files here."
+                            : "You haven't added anything yet."}
+                </p>
             )}
             {items && items.length > 0 && (
                 <ul>
-                    {items.map(item => <ItemCard key={item.id} item={item} />)}
+                    {items.map(item => (
+                        <ItemCard
+                            key={item.id}
+                            item={item}
+                            folderNames={(item.folderIds ?? []).map(id => folderNameById.get(id)).filter(Boolean)}
+                        />
+                    ))}
                 </ul>
             )}
         </section>

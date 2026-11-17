@@ -4,6 +4,8 @@ A personal notes app for saving links, notes, images, text files and code files,
 
 - **Accounts:** sign up and log in with an email and password.
 - **My files:** upload images, text files and code files, or save links and notes. Uploads are tagged automatically by type (`image`, `text`, or `code` + the language, e.g. `python`).
+- **Folders:** group files into folders (e.g. one per class) and pick folders when uploading. A file can be in several folders.
+- **Search your files:** search your own files by title, filename or tag, within all files or one folder.
 - **Search:** find items that have all of the tags you enter.
 
 Every user sees only their own items.
@@ -92,8 +94,9 @@ web/                         React frontend
     AuthPage.jsx             Log in, sign up, forgot password
     HomeScreen.jsx           Header and tabs
     SearchTab.jsx            Tag search
-    FilesTab.jsx             Item list, add link/note form
-    UploadSection.jsx        File upload box
+    FilesTab.jsx             My files: search bar, item list, add link/note form
+    FolderSection.jsx        Folder list: filter, create, delete
+    UploadSection.jsx        File upload box, with folder picker
     ItemCard.jsx             How one item is displayed
     FilePreview.jsx          Image / text preview and download for uploads
 docker-compose.yml           PostgreSQL for local development
@@ -116,9 +119,12 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 | `POST` | `/auth/login` | Log in. Body: `{ email, password }`. Returns `{ token, identity }` |
 | `GET` | `/auth/me` | The logged-in user |
 | `POST` | `/auth/logout` | End the current session |
-| `GET` | `/items` | Your items, newest first |
+| `GET` | `/items?q=&folderId=` | Your items, newest first. Optional `q` matches title, filename or tag; optional `folderId` limits to one folder |
 | `POST` | `/items` | Save a link or note. Body: `{ uniqueKey, type, content, tags }` |
-| `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags` |
+| `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags`, optional `folderIds` (repeat for several) |
+| `GET` | `/folders` | Your folders, alphabetically, each with `itemCount` |
+| `POST` | `/folders` | Create a folder. Body: `{ name }` |
+| `DELETE` | `/folders/{id}` | Delete a folder (the files in it are kept) |
 | `GET` | `/items/{id}/file` | Download an uploaded file |
 | `GET` | `/search?tags=a&tags=b` | Your items that have **all** the given tags |
 

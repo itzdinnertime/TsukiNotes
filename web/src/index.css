@@ -339,3 +339,125 @@ button.secondary:hover {
     font-size: 0.85rem;
     align-self: flex-start;
 }
+
+/* ---------- Search + folders in My files ---------- */
+
+.files-search {
+    margin-bottom: 1.5rem;
+}
+
+.files-search input {
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    font-size: 1rem;
+}
+
+.folder-section {
+    margin-bottom: 1.5rem;
+}
+
+.folder-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+button.folder-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: #1a1d24;
+    border: 1px solid #2a2e37;
+    color: #e4e6eb;
+    font-weight: 500;
+    padding: 0.45rem 0.8rem;
+    align-self: auto;
+}
+
+button.folder-chip:hover {
+    background: #23273a;
+}
+
+button.folder-chip.active {
+    background: #2a2f55;
+    border-color: #5865f2;
+}
+
+.folder-count {
+    font-size: 0.75rem;
+    color: #a8adb8;
+    background: #0f1115;
+    border-radius: 999px;
+    padding: 0 0.45rem;
+}
+
+.folder-icon {
+    flex-shrink: 0;
+    color: #8b93ff;
+}
+
+.folder-hint {
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+}
+
+.folder-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.link-button.danger {
+    color: #f87171;
+}
+
+.new-folder-form {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.new-folder-form input {
+    flex: 1;
+    min-width: 10rem;
+}
+
+.folder-picker {
+    border: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.folder-picker legend {
+    font-size: 0.85rem;
+    color: #a8adb8;
+    padding: 0;
+    margin-bottom: 0.5rem;
+}
+
+.folder-picker .muted {
+    font-size: 0.85rem;
+}
+
+.folder-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #1f2a24;
+    color: #8fd6a8;
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+}
+
+.folder-tag .folder-icon {
+    color: currentColor;
+    width: 12px;
+    height: 12px;
+}

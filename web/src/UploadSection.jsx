@@ -11,11 +11,12 @@ const ACCEPTED = [
     ".html", ".css", ".json", ".yaml", ".yml", ".xml",
 ].join(",");
 
-export default function UploadSection({ onUploaded }) {
+export default function UploadSection({ folders, currentFolderId, onUploaded }) {
     const inputRef = useRef(null);
     const [file, setFile] = useState(null);
     const [title, setTitle] = useState("");
     const [tagsInput, setTagsInput] = useState("");
+    const [folderIds, setFolderIds] = useState([]);
     const [dragging, setDragging] = useState(false);
     const [error, setError] = useState("");
     const [uploading, setUploading] = useState(false);
@@ -27,13 +28,20 @@ export default function UploadSection({ onUploaded }) {
             return;
         }
         setFile(chosen);
+        // Start with the folder that's open below, if any.
+        if (!file) setFolderIds(currentFolderId != null ? [currentFolderId] : []);
         setError("");
+    }
+
+    function toggleFolder(id) {
+        setFolderIds(ids => (ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]));
     }
 
     function reset() {
         setFile(null);
         setTitle("");
         setTagsInput("");
+        setFolderIds([]);
         setError("");
         if (inputRef.current) inputRef.current.value = "";
     }
@@ -53,7 +61,9 @@ export default function UploadSection({ onUploaded }) {
         setUploading(true);
         try {
             const tags = tagsInput.split(",").map(t => t.trim()).filter(Boolean);
-            await uploadFile(file, title.trim(), tags);
+            // Ignore folders that were deleted while the form was open.
+            const validFolderIds = folderIds.filter(id => folders.some(f => f.id === id));
+            await uploadFile(file, title.trim(), tags, validFolderIds);
             reset();
             onUploaded();
         } catch (err) {
@@ -97,6 +107,29 @@ export default function UploadSection({ onUploaded }) {
                            placeholder={`Title (defaults to ${file.name})`} />
                     <input value={tagsInput} onChange={e => setTagsInput(e.target.value)}
                            placeholder="Extra tags, comma separated (the file type is tagged automatically)" />
+                    <fieldset className="folder-picker">
+                        <legend>Add to folders</legend>
+                        {folders.length === 0 ? (
+                            <span className="muted">No folders yet. Create one in the Folders section below.</span>
+                        ) : (
+                            <div className="folder-list">
+                                {folders.map(folder => {
+                                    const on = folderIds.includes(folder.id);
+                                    return (
+                                        <button
+                                            key={folder.id}
+                                            type="button"
+                                            className={on ? "folder-chip active" : "folder-chip"}
+                                            aria-pressed={on}
+                                            onClick={() => toggleFolder(folder.id)}
+                                        >
+                                            {on ? "✓ " : ""}{folder.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </fieldset>
                 </>
             )}
 

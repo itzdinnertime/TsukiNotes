@@ -42,10 +42,16 @@ public class ItemController {
         this.itemSearchViewRepository = itemSearchViewRepository;
     }
 
-    /** All of the logged-in user's items, newest first. */
+    /**
+     * The logged-in user's items, newest first.
+     * Optional: "q" matches title, filename or tag; "folderId" limits to one folder.
+     */
     @GetMapping
-    public List<ItemSearchView> listItems(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity) {
-        return itemSearchViewRepository.findByIdentityIdOrderByCreatedAtDesc(identity.getId());
+    public List<ItemSearchView> listItems(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
+                                          @RequestParam(value = "q", required = false) String query,
+                                          @RequestParam(value = "folderId", required = false) Long folderId) {
+        String cleanQuery = query == null ? "" : query.trim();
+        return itemSearchViewRepository.findForUser(identity.getId(), folderId == null ? 0 : folderId, cleanQuery);
     }
 
     @PostMapping
@@ -54,14 +60,18 @@ public class ItemController {
         return itemService.createItem(identity, request.getUniqueKey(), request.getType(), request.getContent(), request.getTags());
     }
 
-    /** Multipart upload: "file" (required), "title" and comma-separated "tags" (optional). */
+    /**
+     * Multipart upload: "file" (required); optional "title", comma-separated "tags",
+     * and "folderIds" (repeat the field, or comma-separate) for the folders to put it in.
+     */
     @PostMapping(path = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Item uploadFile(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
                            @RequestPart("file") MultipartFile file,
                            @RequestParam(value = "title", required = false) String title,
-                           @RequestParam(value = "tags", required = false) String tags) {
+                           @RequestParam(value = "tags", required = false) String tags,
+                           @RequestParam(value = "folderIds", required = false) List<Long> folderIds) {
         List<String> extraTags = tags == null ? List.of() : Arrays.asList(tags.split(","));
-        return itemService.uploadFile(identity, file, title, extraTags);
+        return itemService.uploadFile(identity, file, title, extraTags, folderIds == null ? List.of() : folderIds);
     }
 
     @GetMapping("/{id}/file")

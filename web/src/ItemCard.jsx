@@ -1,4 +1,5 @@
 import FilePreview from "./FilePreview";
+import { FolderIcon } from "./FolderSection";
 import { formatBytes } from "./format";
 
 // Only allow http(s) URLs so a stored "javascript:..." value can't run when clicked.
@@ -26,7 +27,7 @@ function ItemContent({ type, content }) {
     return <p className="item-text">{content}</p>;
 }
 
-export default function ItemCard({ item }) {
+export default function ItemCard({ item, folderNames = [] }) {
     const created = item.createdAt ? new Date(item.createdAt).toLocaleDateString() : null;
     const details = [item.hasFile && item.sizeBytes != null ? formatBytes(item.sizeBytes) : null, created]
         .filter(Boolean)
@@ -43,6 +44,9 @@ export default function ItemCard({ item }) {
                 : <ItemContent type={item.type} content={item.content} />}
             <div className="item-footer">
                 <div className="tag-list">
+                    {folderNames.map(name => (
+                        <span key={`folder-${name}`} className="folder-tag"><FolderIcon />{name}</span>
+                    ))}
                     {item.tags.map(tag => <span key={tag} className="tag">#{tag}</span>)}
                 </div>
                 {details && <span className="muted">{details}</span>}

@@ -45,6 +45,9 @@ public class ItemSearchView {
     @Column(name = "size_bytes")
     private Long sizeBytes;
 
+    @Column(name = "folder_ids")
+    private List<Long> folderIds;
+
     // getters only, no setters, this is read-only
 
     public Long getId() {
@@ -89,5 +92,9 @@ public class ItemSearchView {
 
     public Long getSizeBytes() {
         return sizeBytes;
+    }
+
+    public List<Long> getFolderIds() {
+        return folderIds;
     }
 }

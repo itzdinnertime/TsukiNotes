@@ -35,13 +35,16 @@ public class ItemService {
     private final ItemTagRepository itemTagRepository;
     private final TagService tagService;
     private final FileStorageService fileStorageService;
+    private final FolderService folderService;
 
     public ItemService(ItemRepository itemRepository, ItemTagRepository itemTagRepository,
-                       TagService tagService, FileStorageService fileStorageService) {
+                       TagService tagService, FileStorageService fileStorageService,
+                       FolderService folderService) {
         this.itemRepository = itemRepository;
         this.itemTagRepository = itemTagRepository;
         this.tagService = tagService;
         this.fileStorageService = fileStorageService;
+        this.folderService = folderService;
     }
 
     @Transactional
@@ -67,7 +70,8 @@ public class ItemService {
      * ("image", "text", or the language, plus "code" for code files), on top of any tags the user gave.
      */
     @Transactional
-    public Item uploadFile(Identity identity, MultipartFile file, String title, List<String> extraTags) {
+    public Item uploadFile(Identity identity, MultipartFile file, String title, List<String> extraTags,
+                           List<Long> folderIds) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please choose a file to upload");
         }
@@ -113,6 +117,8 @@ public class ItemService {
             tags.addAll(extraTags);
         }
         attachTags(item, tags);
+        // Throws (rolling everything back, including the saved file) if a folder isn't the user's.
+        folderService.addItemToFolders(identity, item.getId(), folderIds);
         return item;
     }
 
