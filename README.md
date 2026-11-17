@@ -63,6 +63,38 @@ npm run dev
 
 Open http://localhost:5173 and create an account.
 
+## Running the tests
+
+**Backend** (needs Docker running; your real database is never touched):
+
+```bash
+cd api
+./mvnw test          # Windows: .\mvnw test
+```
+
+Each run starts a throwaway PostgreSQL 16 in Docker (via [Testcontainers](https://testcontainers.com/)), applies every migration to it, and runs the tests against the real API. Emails are captured instead of sent, and uploads go to a temporary folder. It takes about 20 seconds.
+
+| Test class | Covers |
+|---|---|
+| `AuthTest` | Sign-up validation, passwords stored as bcrypt, log-in, session tokens (hashed, expiring), log-out, the invite token |
+| `LoginLimitsTest` | Warnings and the 5-per-email pause, correct password refused while paused, unknown emails behave identically, the 20-per-IP limit |
+| `PasswordResetTest` | The email and link, one-time links, logout everywhere, newest-link-only, 3 emails per hour (also under simultaneous requests), expired and fake links |
+| `UploadTest` | Automatic tags, fake/binary/unsupported files rejected without leaving files behind, folder required, files served back safely |
+| `FoldersAndItemsTest` | Folders (names, rename, delete rules), moving and deleting items, both searches, and that users can never see or change each other's things |
+| `FileClassifierTest` | Every allowed extension and every rejection, without a database |
+| `ApiApplicationTests` | The app starts and all migrations apply to an empty database |
+
+**Frontend:**
+
+```bash
+cd web
+npm test             # or: npm run test:watch, to re-run on every save
+```
+
+Component tests with [Vitest](https://vitest.dev/) and [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), in a simulated browser with the API mocked, so the backend doesn't need to be running. They cover log in, sign up, forgot password with resend, choosing a new password, opening a reset link, uploading (folder required, size limit), deleting, moving between folders, and that `javascript:` links are never clickable.
+
+Frontend tests sit next to the code they test (`web/src/*.test.jsx`, shared setup in `web/src/test/setup.js`); backend tests are in `api/src/test/java`.
+
 ## Configuration
 
 Backend settings are in [`api/src/main/resources/application.yaml`](api/src/main/resources/application.yaml):
@@ -278,6 +310,12 @@ docker exec tsukinote_db psql -U tsukinote_user -d tsukinote -c "DELETE FROM log
 - Look for `Could not send password reset email` in the API's output after requesting a reset.
 - Check your spam folder. Each account gets at most 3 reset emails per hour; extra requests are silently ignored.
 
+**Frontend tests all fail with "Vitest failed to find the current suite"** (Windows)
+Your terminal's path starts with a lowercase `c:\` while files resolve to `C:\`, so Vitest loads itself twice. Open the terminal at a path starting with a capital `C:\` (e.g. `cd C:\Users\...\TsukiNotes\web`) and run `npm test` again.
+
+**Backend tests fail with "Could not find a valid Docker environment"**
+Start Docker Desktop: the tests need it to run their throwaway database.
+
 **Uploaded files show "Couldn't load file"**
 The API was probably started from a different folder than before, so it's looking in a different `uploads/` directory. Start it from `api/`.
 
@@ -288,4 +326,3 @@ The API was probably started from a different folder than before, so it's lookin
 - Searching inside the text of uploaded files
 - Email verification (confirming new accounts own their email address)
 - Reading the database password and invite token from environment variables instead of the code
-- Automated tests
