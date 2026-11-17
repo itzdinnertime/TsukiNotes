@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 @Service
 public class IdentityService {
 
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\s]+@[^@\s]+\.[^@\s]+$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MIN_PASSWORD_LENGTH = 8;
     // BCrypt only uses the first 72 bytes of a password.
     private static final int MAX_PASSWORD_LENGTH = 72;

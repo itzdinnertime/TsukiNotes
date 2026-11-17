@@ -1,19 +1,11 @@
-import { useState } from "react";
-import { createItem, searchItems } from "./api";
+import { useEffect, useState } from "react";
+import { createItem, getCurrentIdentity, getToken, logOut, searchItems, setUnauthorizedHandler } from "./api";
 import AuthPage from "./AuthPage";
 
-const IDENTITY_STORAGE_KEY = "tsukinotes.identity";
-
-function loadStoredIdentity() {
-    try {
-        return JSON.parse(localStorage.getItem(IDENTITY_STORAGE_KEY));
-    } catch {
-        return null;
-    }
-}
-
 function App() {
-    const [identity, setIdentity] = useState(loadStoredIdentity);
+    const [identity, setIdentity] = useState(null);
+    // If a token is saved from an earlier visit, ask the server whether it's still valid before showing anything.
+    const [checkingSession, setCheckingSession] = useState(() => Boolean(getToken()));
 
     const [uniqueKey, setUniqueKey] = useState("");
     const [type, setType] = useState("link");
@@ -24,23 +16,37 @@ function App() {
     const [results, setResults] = useState([]);
     const [error, setError] = useState("");
 
-    function handleAuthenticated(id) {
-        localStorage.setItem(IDENTITY_STORAGE_KEY, JSON.stringify(id));
-        setIdentity(id);
-    }
-
-    function handleLogOut() {
-        localStorage.removeItem(IDENTITY_STORAGE_KEY);
+    function resetToLoggedOut() {
         setIdentity(null);
         setResults([]);
         setError("");
+    }
+
+    useEffect(() => {
+        setUnauthorizedHandler(resetToLoggedOut);
+
+        if (getToken()) {
+            getCurrentIdentity()
+                .then(setIdentity)
+                .catch(() => setIdentity(null))
+                .finally(() => setCheckingSession(false));
+        }
+    }, []);
+
+    async function handleLogOut() {
+        try {
+            await logOut();
+        } catch {
+            // Even if the server call fails, the token has been discarded locally.
+        }
+        resetToLoggedOut();
     }
 
     async function handleCreate(e) {
         e.preventDefault();
         try {
             const tags = tagsInput.split(",").map(t => t.trim()).filter(Boolean);
-            await createItem(identity.id, uniqueKey, type, content, tags);
+            await createItem(uniqueKey, type, content, tags);
             setUniqueKey("");
             setContent("");
             setTagsInput("");
@@ -62,8 +68,12 @@ function App() {
         }
     }
 
+    if (checkingSession) {
+        return <p className="muted">Loading…</p>;
+    }
+
     if (!identity) {
-        return <AuthPage onAuthenticated={handleAuthenticated} />;
+        return <AuthPage onAuthenticated={setIdentity} />;
     }
 
     return (

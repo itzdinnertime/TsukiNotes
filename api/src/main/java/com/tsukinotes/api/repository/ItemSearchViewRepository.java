@@ -9,6 +9,6 @@ import java.util.List;
 
 public interface ItemSearchViewRepository extends JpaRepository<ItemSearchView, Long> {
 
-    @Query(value = "SELECT * FROM item_search_view WHERE tags @> CAST(:tags AS varchar[])", nativeQuery = true)
-    List<ItemSearchView> searchByTags(@Param("tags") String[] tags);
+    @Query(value = "SELECT * FROM item_search_view WHERE identity_id = :identityId AND tags @> CAST(:tags AS varchar[])", nativeQuery = true)
+    List<ItemSearchView> searchByTags(@Param("identityId") Long identityId, @Param("tags") String[] tags);
 }
