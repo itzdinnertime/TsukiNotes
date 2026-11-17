@@ -32,6 +32,19 @@ public class ItemSearchView {
 
     private List<String> tags;
 
+    // True for uploaded files; the file itself is fetched from GET /items/{id}/file.
+    @Column(name = "has_file")
+    private boolean hasFile;
+
+    @Column(name = "original_file_name")
+    private String originalFileName;
+
+    @Column(name = "content_type")
+    private String contentType;
+
+    @Column(name = "size_bytes")
+    private Long sizeBytes;
+
     // getters only, no setters, this is read-only
 
     public Long getId() {
@@ -60,5 +73,21 @@ public class ItemSearchView {
 
     public List<String> getTags() {
         return tags;
+    }
+
+    public boolean getHasFile() {
+        return hasFile;
+    }
+
+    public String getOriginalFileName() {
+        return originalFileName;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public Long getSizeBytes() {
+        return sizeBytes;
     }
 }

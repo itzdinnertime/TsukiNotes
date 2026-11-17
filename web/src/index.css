@@ -143,3 +143,199 @@ button:disabled {
 .app-header h2 {
     margin: 0;
 }
+
+/* ---------- Home screen ---------- */
+
+.app-header > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.app-header .muted {
+    font-size: 0.85rem;
+}
+
+button.secondary {
+    background: transparent;
+    border: 1px solid #2a2e37;
+    color: #e4e6eb;
+}
+
+button.secondary:hover {
+    background: #1a1d24;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid #2a2e37;
+    margin-bottom: 1.25rem;
+}
+
+.tab {
+    background: none;
+    border-radius: 6px 6px 0 0;
+    border-bottom: 2px solid transparent;
+    color: #a8adb8;
+    font-weight: 500;
+    padding: 0.6rem 1rem;
+    margin-bottom: -1px;
+}
+
+.tab:hover {
+    background: #1a1d24;
+    color: #e4e6eb;
+}
+
+.tab.active {
+    color: #e4e6eb;
+    border-bottom-color: #5865f2;
+}
+
+.search-form {
+    flex-direction: row;
+    padding: 0.75rem;
+}
+
+.search-form input {
+    flex: 1;
+    min-width: 0;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-header h3 {
+    margin: 0;
+}
+
+.form-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.empty {
+    text-align: center;
+    color: #a8adb8;
+    padding: 2rem 0;
+}
+
+/* ---------- Item cards ---------- */
+
+.item-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.item-card a {
+    color: #8b93ff;
+    word-break: break-all;
+}
+
+.item-text {
+    margin: 0;
+    white-space: pre-wrap;
+}
+
+.item-media {
+    max-width: 100%;
+    max-height: 320px;
+    border-radius: 6px;
+    background: #0f1115;
+}
+
+.item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.badge {
+    font-size: 0.75rem;
+    color: #a8adb8;
+    border: 1px solid #2a2e37;
+    border-radius: 999px;
+    padding: 0.1rem 0.6rem;
+}
+
+.tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.tag {
+    background: #23273a;
+    color: #8b93ff;
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+}
+
+/* ---------- Uploads ---------- */
+
+.dropzone {
+    display: block;
+    border: 2px dashed #2a2e37;
+    border-radius: 8px;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    line-height: 1.6;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone:hover,
+.dropzone.dragging {
+    border-color: #5865f2;
+    background: #1f2330;
+}
+
+.dropzone:focus-within {
+    border-color: #5865f2;
+}
+
+.dropzone .muted {
+    font-size: 0.85rem;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.code-preview {
+    margin: 0;
+    background: #0f1115;
+    border: 1px solid #2a2e37;
+    border-radius: 6px;
+    padding: 0.75rem;
+    overflow-x: auto;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    tab-size: 4;
+}
+
+.download-link {
+    font-size: 0.85rem;
+    align-self: flex-start;
+}

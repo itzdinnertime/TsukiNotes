@@ -30,11 +30,18 @@ export function setUnauthorizedHandler(handler) {
 }
 
 async function apiFetch(path, options = {}) {
+    const response = await request(path, options);
+    return response.status === 204 ? null : response.json();
+}
+
+/** Sends a request with the invite + session headers and throws on errors. Returns the raw Response. */
+async function request(path, options = {}) {
     const token = getToken();
     const response = await fetch(`${API_BASE}${path}`, {
         ...options,
         headers: {
-            "Content-Type": "application/json",
+            // FormData bodies need the browser to set their own multipart Content-Type.
+            ...(typeof options.body === "string" ? { "Content-Type": "application/json" } : {}),
             "X-Invite-Token": INVITE_TOKEN,
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...options.headers,
@@ -51,7 +58,27 @@ async function apiFetch(path, options = {}) {
         throw new Error(errorText || `Request failed: ${response.status}`);
     }
 
-    return response.status === 204 ? null : response.json();
+    return response;
+}
+
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+export function listItems() {
+    return apiFetch("/items");
+}
+
+export function uploadFile(file, title, tags) {
+    const form = new FormData();
+    form.append("file", file);
+    if (title) form.append("title", title);
+    if (tags.length > 0) form.append("tags", tags.join(","));
+    return apiFetch("/items/upload", { method: "POST", body: form });
+}
+
+/** Downloads an uploaded file (with the session token, which <img src> can't send) as a Blob. */
+export async function fetchFile(itemId) {
+    const response = await request(`/items/${itemId}/file`);
+    return response.blob();
 }
 
 export function createItem(uniqueKey, type, content, tags) {

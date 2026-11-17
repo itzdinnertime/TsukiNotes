@@ -5,6 +5,12 @@ spring:
     url: jdbc:postgresql://localhost:5432/tsukinote
     username: tsukinote_user
     password: tsukinote_pass
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
 
 app:
     invite-token: tsuki-secret-6767
+    # Where uploaded files are kept, relative to the directory the API is started from.
+    storage-dir: uploads
