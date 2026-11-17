@@ -1,0 +1,174 @@
+# TsukiNotes
+
+A personal notes app for saving links, notes, images, text files and code files, and finding them again by tag.
+
+- **Accounts:** sign up and log in with an email and password.
+- **My files:** upload images, text files and code files, or save links and notes. Uploads are tagged automatically by type (`image`, `text`, or `code` + the language, e.g. `python`).
+- **Search:** find items that have all of the tags you enter.
+
+Every user sees only their own items.
+
+## Tech stack
+
+| Part | Tech |
+|---|---|
+| Frontend (`web/`) | React 19, Vite |
+| Backend (`api/`) | Java 21, Spring Boot 4, Spring Data JPA |
+| Database | PostgreSQL 16 (via Docker), migrations with Flyway |
+
+## Prerequisites
+
+- **Java 21** (no separate Maven install needed; the project includes `mvnw`)
+- **Node.js** 20.19+ or 22.12+
+- **Docker Desktop** (for the database)
+
+## Getting started
+
+Run each step from the repository root, each long-running command in its own terminal.
+
+**1. Start the database**
+
+```bash
+docker compose up -d
+```
+
+This starts PostgreSQL on port 5432 with the database `tsukinote`.
+
+**2. Start the API** (http://localhost:8080)
+
+```bash
+cd api
+./mvnw spring-boot:run        # Windows: .\mvnw spring-boot:run
+```
+
+Database migrations run automatically on startup. Wait for `Started ApiApplication` in the output.
+Start the API from the `api/` folder: uploaded files are saved in `api/uploads/`, relative to where it's started.
+
+**3. Start the frontend** (http://localhost:5173)
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 and create an account.
+
+## Configuration
+
+Backend settings are in [`api/src/main/resources/application.yaml`](api/src/main/resources/application.yaml):
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `spring.datasource.*` | local Docker database | Database connection |
+| `app.invite-token` | `tsuki-secret-6767` | Required in the `X-Invite-Token` header on every request |
+| `app.storage-dir` | `uploads` | Where uploaded files are stored |
+| `spring.servlet.multipart.max-file-size` | `10MB` | Upload size limit |
+
+The frontend's API address and invite token are at the top of [`web/src/api.js`](web/src/api.js).
+The allowed frontend origin (`http://localhost:5173`) is set in [`CorsConfig.java`](api/src/main/java/com/tsukinotes/api/config/CorsConfig.java).
+
+> The database password and invite token are currently stored in the code. Move them to environment variables before deploying anywhere public.
+
+## Project structure
+
+```
+api/                         Spring Boot backend
+  src/main/java/com/tsukinotes/api/
+    auth/                    Invite-token filter, session-token check (AuthInterceptor)
+    config/                  CORS, error handling, which routes need a login
+    controller/              REST endpoints (auth, items, search)
+    domain/                  JPA entities
+    files/                   Upload type detection (FileClassifier) and disk storage
+    repository/              Database access
+    service/                 Business logic (accounts, sessions, items, tags)
+  src/main/resources/
+    application.yaml         Configuration
+    db/migration/            Flyway SQL migrations (V1, V2, ...)
+web/                         React frontend
+  src/
+    api.js                   All calls to the backend
+    App.jsx                  Shows the login page or the home screen
+    AuthPage.jsx             Log in, sign up, forgot password
+    HomeScreen.jsx           Header and tabs
+    SearchTab.jsx            Tag search
+    FilesTab.jsx             Item list, add link/note form
+    UploadSection.jsx        File upload box
+    ItemCard.jsx             How one item is displayed
+    FilePreview.jsx          Image / text preview and download for uploads
+docker-compose.yml           PostgreSQL for local development
+```
+
+## How login works
+
+1. `POST /auth/login` (or `/auth/signup`) checks the password (stored as a bcrypt hash) and returns a random **session token**.
+2. The frontend saves the token and sends it on every request as `Authorization: Bearer <token>`.
+3. The server looks the token up in the `sessions` table to see who is asking. Only a SHA-256 hash of each token is stored. Sessions last 30 days.
+4. `POST /auth/logout` deletes the session, so the token stops working immediately.
+
+## API
+
+Every request needs the `X-Invite-Token` header. Every endpoint except signup and login also needs `Authorization: Bearer <token>`.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/auth/signup` | Create an account. Body: `{ name, email, password }`. Returns `{ token, identity }` |
+| `POST` | `/auth/login` | Log in. Body: `{ email, password }`. Returns `{ token, identity }` |
+| `GET` | `/auth/me` | The logged-in user |
+| `POST` | `/auth/logout` | End the current session |
+| `GET` | `/items` | Your items, newest first |
+| `POST` | `/items` | Save a link or note. Body: `{ uniqueKey, type, content, tags }` |
+| `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags` |
+| `GET` | `/items/{id}/file` | Download an uploaded file |
+| `GET` | `/search?tags=a&tags=b` | Your items that have **all** the given tags |
+
+## File uploads
+
+| Kind | Extensions | Automatic tags |
+|---|---|---|
+| Image | `.png .jpg .jpeg .gif .webp` | `image` |
+| Text | `.txt` / `.md` | `text` / `markdown` |
+| Code | `.py .js .jsx .mjs .ts .tsx .java .kt .c .h .cpp .cc .hpp .cs .go .rs .rb .php .swift .lua .sql .sh .bash .ps1 .html .css .json .yaml .yml .xml` | `code` + the language (e.g. `python`, `typescript`) |
+
+- Files are checked against their contents: a renamed binary or a fake image is rejected.
+- Files are stored on disk under random names; the original name is kept in the database.
+- Text and code files are always served as plain text, so uploaded HTML is shown, never run. SVG is not allowed because it can contain scripts.
+- Uploading a file with a title you already use saves it as "title (2)", "title (3)", and so on.
+- To support a new extension, add it to [`FileClassifier.java`](api/src/main/java/com/tsukinotes/api/files/FileClassifier.java) **and** to `ACCEPTED` in [`UploadSection.jsx`](web/src/UploadSection.jsx).
+
+## Database changes
+
+Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next number (e.g. `V10__describe_change.sql`); it runs automatically the next time the API starts.
+
+## Troubleshooting
+
+**Requests fail with `404` and a JSON body containing `timestamp` / `status` / `path`**
+The running API is older than the frontend and doesn't have that endpoint. Stop it and start it again.
+
+**`BUILD FAILURE` when starting the API, with "Port 8080 was already in use" above it**
+An old API process is still running. Find and stop it:
+
+```powershell
+# Windows (PowerShell)
+Get-NetTCPConnection -LocalPort 8080 -State Listen | Select-Object OwningProcess
+Stop-Process -Id <that PID>
+```
+
+```bash
+# macOS / Linux
+lsof -i :8080
+kill <that PID>
+```
+
+**The page only says "Failed to fetch"**
+The API isn't running or isn't reachable at `http://localhost:8080`.
+
+**The API can't connect to the database**
+Make sure Docker Desktop is running, then run `docker compose up -d`.
+
+## Not built yet
+
+- Password reset by email (the "Forgot your password?" page is a placeholder)
+- Editing and deleting items
+- Limits on repeated failed login attempts
+- Automated tests
