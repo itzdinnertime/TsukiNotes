@@ -1,14 +1,20 @@
 # TsukiNotes
 
-A personal notes app for saving links, notes, images, text files and code files, and finding them again by tag.
+A personal notes app for saving links, notes, images, text files and code files, organising them into folders, and finding them again.
 
 - **Accounts:** sign up and log in with an email and password.
-- **My files:** upload images, text files and code files, or save links and notes. Uploads are tagged automatically by type (`image`, `text`, or `code` + the language, e.g. `python`).
-- **Folders:** group files into folders (e.g. one per class) and pick folders when uploading. A file can be in several folders.
-- **Search your files:** search your own files by title, filename or tag, within all files or one folder.
-- **Search:** find items that have all of the tags you enter.
+- **Uploads:** upload images, text files and code files. Each upload is tagged automatically by type (`image`, `text`, or `code` + the language, e.g. `python`).
+- **Links and notes:** save a URL or a short note with your own tags.
+- **Folders:** group files into folders (e.g. one per class) and choose folders when uploading. A file can be in several folders.
 
-Every user sees only their own items.
+The home screen has two tabs:
+
+| Tab | What it does |
+|---|---|
+| **My files** | Upload box, a search bar, your folders, and the list of your items. The search matches any part of a title, filename, link/note text or tag (ignoring capitals), and can be combined with a folder. |
+| **Search** | Finds items that have **all** of the tags you enter (exact tag names, comma separated). |
+
+Every user sees only their own items and folders.
 
 ## Tech stack
 
@@ -79,11 +85,11 @@ api/                         Spring Boot backend
   src/main/java/com/tsukinotes/api/
     auth/                    Invite-token filter, session-token check (AuthInterceptor)
     config/                  CORS, error handling, which routes need a login
-    controller/              REST endpoints (auth, items, search)
+    controller/              REST endpoints (auth, items, folders, search)
     domain/                  JPA entities
     files/                   Upload type detection (FileClassifier) and disk storage
-    repository/              Database access
-    service/                 Business logic (accounts, sessions, items, tags)
+    repository/              Database access (the My files search query is in ItemSearchViewRepository)
+    service/                 Business logic (accounts, sessions, items, folders, tags)
   src/main/resources/
     application.yaml         Configuration
     db/migration/            Flyway SQL migrations (V1, V2, ...)
@@ -93,14 +99,28 @@ web/                         React frontend
     App.jsx                  Shows the login page or the home screen
     AuthPage.jsx             Log in, sign up, forgot password
     HomeScreen.jsx           Header and tabs
-    SearchTab.jsx            Tag search
-    FilesTab.jsx             My files: search bar, item list, add link/note form
-    FolderSection.jsx        Folder list: filter, create, delete
+    FilesTab.jsx             My files tab: search bar, item list, add link/note form
     UploadSection.jsx        File upload box, with folder picker
-    ItemCard.jsx             How one item is displayed
+    FolderSection.jsx        Folder list: filter, create, delete
+    SearchTab.jsx            Search tab (all-tags search)
+    ItemCard.jsx             How one item is displayed (with its folders and tags)
     FilePreview.jsx          Image / text preview and download for uploads
+    format.js                Small display helpers (file sizes)
 docker-compose.yml           PostgreSQL for local development
 ```
+
+## Data model
+
+| Table | Holds |
+|---|---|
+| `identities` | User accounts: name, email, bcrypt password hash |
+| `sessions` | Login sessions: user, SHA-256 hash of the token, expiry |
+| `items` | Links, notes and uploads. For uploads, also the stored file name, original file name, content type and size |
+| `tags`, `item_tags` | Tag names, and which items have which tags |
+| `folders`, `item_folders` | Each user's folders, and which items are in which folders |
+| `item_search_view` | A database view joining each item with its tags and folder IDs; the item list and both searches read from it |
+
+Deleting a folder removes its `item_folders` rows only; the items stay.
 
 ## How login works
 
@@ -119,14 +139,14 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 | `POST` | `/auth/login` | Log in. Body: `{ email, password }`. Returns `{ token, identity }` |
 | `GET` | `/auth/me` | The logged-in user |
 | `POST` | `/auth/logout` | End the current session |
-| `GET` | `/items?q=&folderId=` | Your items, newest first. Optional `q` matches title, filename or tag; optional `folderId` limits to one folder |
+| `GET` | `/items?q=&folderId=` | Your items, newest first. Optional `q` matches part of a title, filename, link/note text or tag (ignoring capitals); optional `folderId` limits to one folder. Each item includes its `tags` and `folderIds` |
 | `POST` | `/items` | Save a link or note. Body: `{ uniqueKey, type, content, tags }` |
-| `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags`, optional `folderIds` (repeat for several) |
-| `GET` | `/folders` | Your folders, alphabetically, each with `itemCount` |
-| `POST` | `/folders` | Create a folder. Body: `{ name }` |
-| `DELETE` | `/folders/{id}` | Delete a folder (the files in it are kept) |
+| `POST` | `/items/upload` | Upload a file (multipart): `file`, optional `title`, optional comma-separated `tags`, optional `folderIds` (repeat the field for several) |
 | `GET` | `/items/{id}/file` | Download an uploaded file |
-| `GET` | `/search?tags=a&tags=b` | Your items that have **all** the given tags |
+| `GET` | `/folders` | Your folders, alphabetically, each with `itemCount` |
+| `POST` | `/folders` | Create a folder. Body: `{ name }`. Names are unique per user, ignoring capitals, up to 100 characters |
+| `DELETE` | `/folders/{id}` | Delete a folder (the files in it are kept) |
+| `GET` | `/search?tags=a&tags=b` | Your items that have **all** the given tags (exact names) |
 
 ## File uploads
 
@@ -140,11 +160,15 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup an
 - Files are stored on disk under random names; the original name is kept in the database.
 - Text and code files are always served as plain text, so uploaded HTML is shown, never run. SVG is not allowed because it can contain scripts.
 - Uploading a file with a title you already use saves it as "title (2)", "title (3)", and so on.
+- When a folder is open in My files, it's pre-selected in the upload's folder picker.
+- Uploading into a folder that isn't yours is rejected, and nothing is saved.
 - To support a new extension, add it to [`FileClassifier.java`](api/src/main/java/com/tsukinotes/api/files/FileClassifier.java) **and** to `ACCEPTED` in [`UploadSection.jsx`](web/src/UploadSection.jsx).
 
 ## Database changes
 
-Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next number (e.g. `V10__describe_change.sql`); it runs automatically the next time the API starts.
+Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V10__add_folders.sql`, so the next would be `V11__describe_change.sql`); it runs automatically the next time the API starts.
+
+If you change `item_search_view`, drop and recreate it in the migration (see `V10__add_folders.sql`), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java) to match.
 
 ## Troubleshooting
 
@@ -172,9 +196,16 @@ The API isn't running or isn't reachable at `http://localhost:8080`.
 **The API can't connect to the database**
 Make sure Docker Desktop is running, then run `docker compose up -d`.
 
+**Uploaded files show "Couldn't load file"**
+The API was probably started from a different folder than before, so it's looking in a different `uploads/` directory. Start it from `api/`.
+
 ## Not built yet
 
-- Password reset by email (the "Forgot your password?" page is a placeholder)
+- Moving existing files into or out of folders (folders can only be chosen when uploading)
+- Choosing folders for links and notes
+- Renaming folders
 - Editing and deleting items
+- Searching inside the text of uploaded files
+- Password reset by email (the "Forgot your password?" page is a placeholder)
 - Limits on repeated failed login attempts
 - Automated tests
