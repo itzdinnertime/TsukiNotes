@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * CORS is applied as the very first servlet filter, so every response carries the CORS headers,
- * including errors raised before Spring MVC runs (invite-token rejections, uploads over the size limit).
+ * including errors raised before Spring MVC runs (e.g. uploads over the size limit).
  * Without them the browser hides the error message and only reports "Failed to fetch".
  */
 @Configuration

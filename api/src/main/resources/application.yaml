@@ -1,14 +1,20 @@
 spring:
   application:
     name: api
-  # Private, machine-specific settings (e.g. a real email account) go in api/local.yaml, which git
-  # ignores. Anything in it overrides this file. See api/local.example.yaml for a template.
+  # No passwords live in this file. They come from (later wins; real environment variables beat all):
+  #   - the project's .env file (DB_USERNAME, DB_PASSWORD; copy .env.example), found whether the
+  #     API is started from api/ or from the project root
+  #   - api/local.yaml for other private settings, e.g. a real email account (see api/local.example.yaml)
+  # Both files are ignored by git. In production, set environment variables instead.
   config:
-    import: "optional:file:./local.yaml"
+    import:
+      - "optional:file:../.env[.properties]"
+      - "optional:file:./.env[.properties]"
+      - "optional:file:./local.yaml"
   datasource:
-    url: jdbc:postgresql://localhost:5432/tsukinote
-    username: tsukinote_user
-    password: tsukinote_pass
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tsukinote}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
   servlet:
     multipart:
       max-file-size: 10MB
@@ -32,7 +38,6 @@ spring:
       "[mail.smtp.writetimeout]": 10000
 
 app:
-    invite-token: tsuki-secret-6767
     # Where uploaded files are kept, relative to the directory the API is started from.
     storage-dir: uploads
     # Failed logins allowed within the window before logins are paused.

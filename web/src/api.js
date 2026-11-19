@@ -1,5 +1,4 @@
 const API_BASE = "http://localhost:8080";
-const INVITE_TOKEN = "tsuki-secret-6767";
 const TOKEN_STORAGE_KEY = "tsukinotes.token";
 
 let onUnauthorized = () => {};
@@ -34,7 +33,7 @@ async function apiFetch(path, options = {}) {
     return response.status === 204 ? null : response.json();
 }
 
-/** Sends a request with the invite + session headers and throws on errors. Returns the raw Response. */
+/** Sends a request with the session token (if logged in) and throws on errors. Returns the raw Response. */
 async function request(path, options = {}) {
     const token = getToken();
     const response = await fetch(`${API_BASE}${path}`, {
@@ -42,7 +41,6 @@ async function request(path, options = {}) {
         headers: {
             // FormData bodies need the browser to set their own multipart Content-Type.
             ...(typeof options.body === "string" ? { "Content-Type": "application/json" } : {}),
-            "X-Invite-Token": INVITE_TOKEN,
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...options.headers,
         },

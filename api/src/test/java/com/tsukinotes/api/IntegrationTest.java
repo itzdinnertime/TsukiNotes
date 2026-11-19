@@ -48,7 +48,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 @Import(TestcontainersConfiguration.class)
 public abstract class IntegrationTest {
 
-    protected static final String INVITE_TOKEN = "tsuki-secret-6767";
     protected static final String PASSWORD = "password123";
 
     /** Uploads go to a temporary folder, never api/uploads. */
@@ -96,9 +95,8 @@ public abstract class IntegrationTest {
 
     // ---------- Requests ----------
 
-    /** Adds the invite token every request needs, and the session token if given. */
+    /** Adds the session token, if given. */
     protected static <B extends AbstractMockHttpServletRequestBuilder<B>> B withAuth(B request, String sessionToken) {
-        request.header("X-Invite-Token", INVITE_TOKEN);
         if (sessionToken != null) {
             request.header("Authorization", "Bearer " + sessionToken);
         }

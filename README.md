@@ -35,6 +35,14 @@ Every user sees only their own items and folders.
 
 Run each step from the repository root, each long-running command in its own terminal.
 
+**0. Create your `.env` file** (first time only)
+
+```bash
+cp .env.example .env          # Windows: copy .env.example .env
+```
+
+Then open `.env` and choose a database password. Docker uses it to create the database user, and the API uses it to log in. Git ignores `.env`, so the password is never committed. If your database already exists, use the username and password it was created with (before this file existed, those were `tsukinote_user` / `tsukinote_pass`).
+
 **1. Start the database and the local mail server**
 
 ```bash
@@ -76,13 +84,13 @@ Each run starts a throwaway PostgreSQL 16 in Docker (via [Testcontainers](https:
 
 | Test class | Covers |
 |---|---|
-| `AuthTest` | Sign-up validation, passwords stored as bcrypt, log-in, session tokens (hashed, expiring), log-out, the invite token |
+| `AuthTest` | Sign-up validation, passwords stored as bcrypt, log-in, session tokens (hashed, expiring), log-out, no invite token needed |
 | `LoginLimitsTest` | Warnings and the 5-per-email pause, correct password refused while paused, unknown emails behave identically, the 20-per-IP limit |
 | `PasswordResetTest` | The email and link, one-time links, logout everywhere, newest-link-only, 3 emails per hour (also under simultaneous requests), expired and fake links |
 | `UploadTest` | Automatic tags, fake/binary/unsupported files rejected without leaving files behind, folder required, files served back safely |
 | `FoldersAndItemsTest` | Folders (names, rename, delete rules), moving and deleting items, both searches, and that users can never see or change each other's things |
 | `TextSearchTest` | Searching inside uploaded files: the extract around the match, `%` and `_` taken literally, folder filter, other users' files never searched, short files and byte-order marks, images not stored, text deleted with the file, older uploads filled in on startup (skipping missing files) |
-| `SearchViewTest` | The search view is materialized with a GIN index on tags, and never goes stale (folder deletes, direct SQL changes, rolled-back uploads) |
+| `SearchViewTest` | The search table has a GIN index on tags and never goes stale: after uploads, moves, folder and item deletes, tag renames, `TRUNCATE` and direct SQL changes, every stored row equals a fresh computation; two transactions tagging the same item at once keep both tags |
 | `FileClassifierTest` | Every allowed extension and every rejection, without a database |
 | `ApiApplicationTests` | The app starts and all migrations apply to an empty database |
 
@@ -93,7 +101,14 @@ cd api
 ./mvnw test -Dtest=SearchBenchmarkTest -Dbenchmark=true
 ```
 
-It fills a throwaway database with 100,000 items (50 tags, 3 per item), runs the app's multi-tag AND search 30 times against the old plain view and the materialized view, and prints the median PostgreSQL execution times, the cost of a refresh, and both query plans. The report is also saved to `api/target/search-benchmark.txt`. On a Windows laptop with Docker Desktop it measured about **300 ms → 10.5 ms (~28×)** for the search, with each write paying about **0.9 s** to refresh the view.
+It fills a throwaway database with 100,000 items (50 tags, 3 per item) and compares the three ways search has worked: the original **plain view**, the **materialized view** (V13) and the **incremental table** (V15). For each it measures the app's multi-tag AND search (median PostgreSQL execution time of 30 runs) and saving an item with 3 tags and a folder (median of 9 transactions, including keeping search up to date), and prints the query plans. The report is also saved to `api/target/search-benchmark.txt`. Measured on a Windows laptop with Docker Desktop:
+
+| | Plain view | Materialized view | Incremental table |
+|---|---|---|---|
+| Multi-tag AND search | ~240–330 ms | ~0.5 ms | ~0.5 ms |
+| Saving an item | ~3 ms | ~880–990 ms | ~4 ms |
+
+The benchmark runs `VACUUM ANALYZE` before measuring, as autovacuum would on a real server. Without it, freshly bulk-loaded rows sit in the GIN index's unsorted pending list and searches measure about 10 ms instead of 0.5 ms.
 
 **Frontend:**
 
@@ -108,12 +123,24 @@ Frontend tests sit next to the code they test (`web/src/*.test.jsx`, shared setu
 
 ## Configuration
 
-Backend settings are in [`api/src/main/resources/application.yaml`](api/src/main/resources/application.yaml):
+**No passwords are stored in the code.** The API reads them from, in order of priority:
+
+1. real environment variables (use these in production)
+2. `api/local.yaml`, for other private settings such as a real email account (see below)
+3. the `.env` file in the project root (`DB_USERNAME`, `DB_PASSWORD`), which `docker compose` also reads
+
+`.env` and `local.yaml` are both ignored by git. Templates: [`.env.example`](.env.example), [`api/local.example.yaml`](api/local.example.yaml).
+
+| Environment variable | Purpose |
+|---|---|
+| `DB_USERNAME`, `DB_PASSWORD` | Database login. **Required**; there is no default |
+| `DB_URL` | Database address. Default `jdbc:postgresql://localhost:5432/tsukinote` |
+| `MAIL_*` | Outgoing email, see [Sending real email](#sending-real-email-eg-to-gmail) |
+
+Other backend settings are in [`api/src/main/resources/application.yaml`](api/src/main/resources/application.yaml):
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `spring.datasource.*` | local Docker database | Database connection |
-| `app.invite-token` | `tsuki-secret-6767` | Required in the `X-Invite-Token` header on every request |
 | `app.storage-dir` | `uploads` | Where uploaded files are stored |
 | `spring.servlet.multipart.max-file-size` | `10MB` | Upload size limit |
 | `app.login-limits.max-failures-per-email` | `5` | Failed logins allowed per email within the window |
@@ -125,10 +152,10 @@ Backend settings are in [`api/src/main/resources/application.yaml`](api/src/main
 | `app.password-reset.token-lifetime` | `30m` | How long a reset link works |
 | `app.password-reset.max-emails-per-hour` | `3` | Reset emails one account can receive per hour |
 
-The frontend's API address and invite token are at the top of [`web/src/api.js`](web/src/api.js).
+The frontend's API address is at the top of [`web/src/api.js`](web/src/api.js). The frontend holds no secrets: everything in it is downloaded by every visitor.
 The allowed frontend origin (`http://localhost:5173`) is set in [`CorsConfig.java`](api/src/main/java/com/tsukinotes/api/config/CorsConfig.java).
 
-> The database password and invite token are currently stored in the code. Move them to environment variables before deploying anywhere public.
+> The old development password (`tsukinote_pass`) is in this repository's git history, so treat it as public: use a different password for any database outside your own computer.
 
 ### Sending real email (e.g. to Gmail)
 
@@ -151,7 +178,7 @@ Gmail allows roughly 500 emails a day from a personal account, which is fine for
 ```
 api/                         Spring Boot backend
   src/main/java/com/tsukinotes/api/
-    auth/                    Invite-token filter, session-token check (AuthInterceptor), failed-login limits (LoginAttemptService), token helpers (SecureTokens)
+    auth/                    Session-token check (AuthInterceptor), failed-login limits (LoginAttemptService), token helpers (SecureTokens)
     config/                  CORS, error handling, which routes need a login, background tasks (AsyncConfig)
     controller/              REST endpoints (auth, items, folders, search)
     domain/                  JPA entities
@@ -176,6 +203,7 @@ web/                         React frontend
     FilePreview.jsx          Image / text preview and download for uploads
     format.js                Small display helpers (file sizes)
 docker-compose.yml           PostgreSQL and Mailpit (development mail server) for local development
+.env.example                 Template for .env (database username and password)
 ```
 
 ## Data model
@@ -189,8 +217,8 @@ docker-compose.yml           PostgreSQL and Mailpit (development mail server) fo
 | `items` | Links, notes and uploads. For uploads, also the stored file name, original file name, content type and size |
 | `tags`, `item_tags` | Tag names, and which items have which tags |
 | `folders`, `item_folders` | Each user's folders, and which items are in which folders |
-| `item_texts` | The text inside each uploaded text/code file, for searching. A trigram (`pg_trgm`) GIN index on `LOWER(body)` serves "contains" searches. Kept out of `item_search_view` so big files don't slow its refresh. Files uploaded before this table existed are filled in when the API starts |
-| `item_search_view` | A **materialized** view: each item with its tags (as an array) and folder IDs; the item list and both searches read from it. A GIN index on `tags` makes multi-tag AND search (`tags @> '{a,b}'`) an index lookup. Database triggers refresh it once when any change to items, tags or folders commits, in the same transaction, so a search right after an upload always finds it |
+| `item_texts` | The text inside each uploaded text/code file, for searching. A trigram (`pg_trgm`) GIN index on `LOWER(body)` serves "contains" searches. Kept out of `item_search_view` so big files don't bloat search rows. Files uploaded before this table existed are filled in when the API starts |
+| `item_search_view` | Despite the name, a **table** (kept for compatibility): one stored search row per item, with its tags (as an array) and folder IDs. The item list and both searches read from it. A GIN index on `tags` makes multi-tag AND search (`tags @> '{a,b}'`) an index lookup. Database triggers on `items`, `item_tags`, `item_folders` and `tags` recompute **only the changed item's row**, inside the same transaction, so a search right after an upload always finds it and a save costs milliseconds. The row definition is the SQL function `item_search_rows(item_id)` |
 
 Deleting a folder removes its `item_folders` rows only; the items stay.
 
@@ -227,7 +255,7 @@ Links expire after 30 minutes. Each account gets at most 3 reset emails per hour
 
 ## API
 
-Every request needs the `X-Invite-Token` header. Every endpoint except signup, login and the two password-reset endpoints also needs `Authorization: Bearer <token>`.
+Every endpoint except signup, login and the two password-reset endpoints needs `Authorization: Bearer <token>`.
 
 | Method | Path | Description |
 |---|---|---|
@@ -279,9 +307,9 @@ Deleting an item asks for confirmation once, then the card disappears immediatel
 
 ## Database changes
 
-Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V14__add_item_texts.sql`, so the next would be `V15__describe_change.sql`); it runs automatically the next time the API starts.
+Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V15__incremental_item_search.sql`, so the next would be `V16__describe_change.sql`); it runs automatically the next time the API starts.
 
-If you change `item_search_view`, drop and recreate it in the migration with `DROP MATERIALIZED VIEW` / `CREATE MATERIALIZED VIEW`, recreate its three indexes (the unique one on `id` is required by the refresh), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java) to match.
+To change what a search row contains, in one migration: alter the `item_search_view` table's columns, replace the `item_search_rows` function to match, refill the table (`DELETE FROM item_search_view; INSERT INTO item_search_view SELECT * FROM item_search_rows(NULL);`), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java). If the row starts depending on another table, add a trigger on that table too (see `V15__incremental_item_search.sql`). `SearchViewTest` checks every stored row still equals a fresh computation.
 
 ## Troubleshooting
 
@@ -308,6 +336,9 @@ The API isn't running or isn't reachable at `http://localhost:8080`.
 
 **The API can't connect to the database**
 Make sure Docker Desktop is running, then run `docker compose up -d`.
+
+**`password authentication failed for user`, or `docker compose` says "Set DB_PASSWORD in .env"**
+You don't have a `.env` file in the project root, or its username/password don't match the ones the database was first created with. Create it from `.env.example` (see [Getting started](#getting-started)). Changing `.env` later doesn't change an existing database's password.
 
 **"Too many failed login attempts" while developing locally**
 Wait for the pause to end, or clear the recorded failures:
@@ -336,4 +367,4 @@ The API was probably started from a different folder than before, so it's lookin
 - Choosing folders when creating a link or note (use **Move to folders** afterwards)
 - Editing an item's title or tags
 - Email verification (confirming new accounts own their email address)
-- Reading the database password and invite token from environment variables instead of the code
+- A limit on how often sign-up can be used (anyone can create accounts now that the invite token is gone)

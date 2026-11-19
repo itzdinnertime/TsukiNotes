@@ -108,13 +108,14 @@ class AuthTest extends IntegrationTest {
     }
 
     @Test
-    void everyRequestNeedsTheInviteToken() throws Exception {
+    void noInviteTokenIsNeeded() throws Exception {
+        // The old X-Invite-Token gate was removed: a plain request with just a session works.
         String token = signUp("invite@example.com");
 
         int status = mvc.perform(get("/auth/me").header("Authorization", "Bearer " + token))
                 .andReturn().getResponse().getStatus();
 
-        assertThat(status).isEqualTo(401);
+        assertThat(status).isEqualTo(200);
     }
 
     private void assertSignUpFails(String name, String email, String password, int status, String message) throws Exception {
