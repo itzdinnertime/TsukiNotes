@@ -5,6 +5,7 @@ import com.tsukinotes.api.domain.Identity;
 import com.tsukinotes.api.domain.Item;
 import com.tsukinotes.api.domain.ItemSearchView;
 import com.tsukinotes.api.dto.CreateItemRequest;
+import com.tsukinotes.api.repository.ItemRepository;
 import com.tsukinotes.api.repository.ItemSearchViewRepository;
 import com.tsukinotes.api.service.ItemService;
 import com.tsukinotes.api.service.ItemService.UploadedFile;
@@ -31,6 +32,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/items")
@@ -38,22 +41,51 @@ public class ItemController {
 
     private final ItemService itemService;
     private final ItemSearchViewRepository itemSearchViewRepository;
+    private final ItemRepository itemRepository;
 
-    public ItemController(ItemService itemService, ItemSearchViewRepository itemSearchViewRepository) {
+    public ItemController(ItemService itemService, ItemSearchViewRepository itemSearchViewRepository,
+                          ItemRepository itemRepository) {
         this.itemService = itemService;
         this.itemSearchViewRepository = itemSearchViewRepository;
+        this.itemRepository = itemRepository;
     }
+
+    /** Characters of file text shown on each side of a match. */
+    private static final int SNIPPET_CONTEXT = 60;
 
     /**
      * The logged-in user's items, newest first.
-     * Optional: "q" matches title, filename or tag; "folderId" limits to one folder.
+     * Optional: "q" matches title, filename, tag or the text inside uploaded text/code files
+     * (those results include "textMatch", an extract around the match); "folderId" limits to one folder.
      */
     @GetMapping
     public List<ItemSearchView> listItems(@RequestAttribute(AuthInterceptor.IDENTITY_ATTRIBUTE) Identity identity,
                                           @RequestParam(value = "q", required = false) String query,
                                           @RequestParam(value = "folderId", required = false) Long folderId) {
         String cleanQuery = query == null ? "" : query.trim();
-        return itemSearchViewRepository.findForUser(identity.getId(), folderId == null ? 0 : folderId, cleanQuery);
+        List<ItemSearchView> items = itemSearchViewRepository.findForUser(
+                identity.getId(), folderId == null ? 0 : folderId, cleanQuery, containsPattern(cleanQuery));
+        if (!cleanQuery.isEmpty()) {
+            addTextMatches(items, cleanQuery);
+        }
+        return items;
+    }
+
+    private void addTextMatches(List<ItemSearchView> items, String query) {
+        Map<Long, ItemSearchView> textItems = items.stream()
+                .filter(item -> item.getHasFile() && ItemService.hasSearchableText(item.getType()))
+                .collect(Collectors.toMap(ItemSearchView::getId, item -> item));
+        if (textItems.isEmpty()) {
+            return;
+        }
+        for (ItemRepository.TextMatch match : itemRepository.findTextMatches(textItems.keySet(), query, SNIPPET_CONTEXT)) {
+            textItems.get(match.getItemId()).setTextMatch(match.getSnippet());
+        }
+    }
+
+    /** A LIKE pattern matching text that contains the query literally (its \, % and _ escaped). */
+    static String containsPattern(String query) {
+        return "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
     }
 
     @PostMapping

@@ -12,7 +12,7 @@ The home screen has two tabs:
 
 | Tab | What it does |
 |---|---|
-| **My files** | Upload box, a search bar, your folders, and the list of your items. The search matches any part of a title, filename, link/note text or tag (ignoring capitals), and can be combined with a folder. |
+| **My files** | Upload box, a search bar, your folders, and the list of your items. The search matches any part of a title, filename, link/note text, tag, or **the text inside uploaded text and code files** (ignoring capitals), and can be combined with a folder. When it matched inside a file, the card shows the surrounding text with the match highlighted. |
 | **Search** | Finds items that have **all** of the tags you enter (exact tag names, comma separated). |
 
 Every user sees only their own items and folders.
@@ -81,6 +81,7 @@ Each run starts a throwaway PostgreSQL 16 in Docker (via [Testcontainers](https:
 | `PasswordResetTest` | The email and link, one-time links, logout everywhere, newest-link-only, 3 emails per hour (also under simultaneous requests), expired and fake links |
 | `UploadTest` | Automatic tags, fake/binary/unsupported files rejected without leaving files behind, folder required, files served back safely |
 | `FoldersAndItemsTest` | Folders (names, rename, delete rules), moving and deleting items, both searches, and that users can never see or change each other's things |
+| `TextSearchTest` | Searching inside uploaded files: the extract around the match, `%` and `_` taken literally, folder filter, other users' files never searched, short files and byte-order marks, images not stored, text deleted with the file, older uploads filled in on startup (skipping missing files) |
 | `SearchViewTest` | The search view is materialized with a GIN index on tags, and never goes stale (folder deletes, direct SQL changes, rolled-back uploads) |
 | `FileClassifierTest` | Every allowed extension and every rejection, without a database |
 | `ApiApplicationTests` | The app starts and all migrations apply to an empty database |
@@ -101,7 +102,7 @@ cd web
 npm test             # or: npm run test:watch, to re-run on every save
 ```
 
-Component tests with [Vitest](https://vitest.dev/) and [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), in a simulated browser with the API mocked, so the backend doesn't need to be running. They cover log in, sign up, forgot password with resend, choosing a new password, opening a reset link, uploading (folder required, size limit), deleting, moving between folders, and that `javascript:` links are never clickable.
+Component tests with [Vitest](https://vitest.dev/) and [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), in a simulated browser with the API mocked, so the backend doesn't need to be running. They cover log in, sign up, forgot password with resend, choosing a new password, opening a reset link, uploading (folder required, size limit), deleting, moving between folders, searching inside files (highlighted extract, waiting for a pause in typing), and that `javascript:` links are never clickable.
 
 Frontend tests sit next to the code they test (`web/src/*.test.jsx`, shared setup in `web/src/test/setup.js`); backend tests are in `api/src/test/java`.
 
@@ -188,6 +189,7 @@ docker-compose.yml           PostgreSQL and Mailpit (development mail server) fo
 | `items` | Links, notes and uploads. For uploads, also the stored file name, original file name, content type and size |
 | `tags`, `item_tags` | Tag names, and which items have which tags |
 | `folders`, `item_folders` | Each user's folders, and which items are in which folders |
+| `item_texts` | The text inside each uploaded text/code file, for searching. A trigram (`pg_trgm`) GIN index on `LOWER(body)` serves "contains" searches. Kept out of `item_search_view` so big files don't slow its refresh. Files uploaded before this table existed are filled in when the API starts |
 | `item_search_view` | A **materialized** view: each item with its tags (as an array) and folder IDs; the item list and both searches read from it. A GIN index on `tags` makes multi-tag AND search (`tags @> '{a,b}'`) an index lookup. Database triggers refresh it once when any change to items, tags or folders commits, in the same transaction, so a search right after an upload always finds it |
 
 Deleting a folder removes its `item_folders` rows only; the items stay.
@@ -235,7 +237,7 @@ Every request needs the `X-Invite-Token` header. Every endpoint except signup, l
 | `POST` | `/auth/password-reset/confirm` | Set a new password. Body: `{ token, password }`. `204`, or `400` if the link is invalid, used or expired |
 | `GET` | `/auth/me` | The logged-in user |
 | `POST` | `/auth/logout` | End the current session |
-| `GET` | `/items?q=&folderId=` | Your items, newest first. Optional `q` matches part of a title, filename, link/note text or tag (ignoring capitals); optional `folderId` limits to one folder. Each item includes its `tags` and `folderIds` |
+| `GET` | `/items?q=&folderId=` | Your items, newest first. Optional `q` matches part of a title, filename, link/note text, tag, or the text inside an uploaded text/code file (ignoring capitals); optional `folderId` limits to one folder. Each item includes its `tags` and `folderIds`; when `q` matched inside the file, also `textMatch`, about 60 characters either side of the first match |
 | `POST` | `/items` | Save a link or note. Body: `{ uniqueKey, type, content, tags }` |
 | `POST` | `/items/upload` | Upload a file (multipart): `file` and **at least one** `folderIds` (repeat the field for several), plus optional `title` and comma-separated `tags` |
 | `GET` | `/items/{id}/file` | Download an uploaded file |
@@ -277,7 +279,7 @@ Deleting an item asks for confirmation once, then the card disappears immediatel
 
 ## Database changes
 
-Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V13__materialize_item_search_view.sql`, so the next would be `V14__describe_change.sql`); it runs automatically the next time the API starts.
+Never edit a migration that has already run. Add a new file in `api/src/main/resources/db/migration/` with the next unused number (the latest is `V14__add_item_texts.sql`, so the next would be `V15__describe_change.sql`); it runs automatically the next time the API starts.
 
 If you change `item_search_view`, drop and recreate it in the migration with `DROP MATERIALIZED VIEW` / `CREATE MATERIALIZED VIEW`, recreate its three indexes (the unique one on `id` is required by the refresh), and update [`ItemSearchView.java`](api/src/main/java/com/tsukinotes/api/domain/ItemSearchView.java) to match.
 
@@ -333,6 +335,5 @@ The API was probably started from a different folder than before, so it's lookin
 
 - Choosing folders when creating a link or note (use **Move to folders** afterwards)
 - Editing an item's title or tags
-- Searching inside the text of uploaded files
 - Email verification (confirming new accounts own their email address)
 - Reading the database password and invite token from environment variables instead of the code

@@ -90,11 +90,28 @@ function FolderEditor({ item, folders, onSaved, onCancel }) {
     );
 }
 
+/** The extract around where a search matched inside a file, with the searched words marked. */
+function TextMatch({ text, highlight }) {
+    const query = highlight?.trim();
+    const parts = query
+        ? text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"))
+        : [text];
+    return (
+        <p className="text-match">
+            <span className="muted">Found in file: </span>
+            {parts.map((part, i) =>
+                // split() with a capture group puts the matches at the odd positions.
+                i % 2 === 1 ? <mark key={i}>{part}</mark> : <span key={i}>{part}</span>)}
+        </p>
+    );
+}
+
 /**
  * One item. When `onChanged` is given (the My files tab), it also offers
- * moving the item between folders and deleting it.
+ * moving the item between folders and deleting it. `highlight` is the current search, used to
+ * mark it in the extract shown when the search matched inside the file.
  */
-export default function ItemCard({ item, folders = [], onChanged }) {
+export default function ItemCard({ item, folders = [], onChanged, highlight = "" }) {
     const [editingFolders, setEditingFolders] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [error, setError] = useState("");
@@ -140,6 +157,7 @@ export default function ItemCard({ item, folders = [], onChanged }) {
             {item.hasFile
                 ? <FilePreview item={item} />
                 : <ItemContent type={item.type} content={item.content} />}
+            {item.textMatch && <TextMatch text={item.textMatch} highlight={highlight} />}
             <div className="item-footer">
                 <div className="tag-list">
                     {folderNames.map(name => (

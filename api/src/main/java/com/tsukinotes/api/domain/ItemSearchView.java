@@ -5,6 +5,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import org.hibernate.annotations.Immutable;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -48,7 +49,20 @@ public class ItemSearchView {
     @Column(name = "folder_ids")
     private List<Long> folderIds;
 
-    // getters only, no setters, this is read-only
+    // Not a database column: when a search matched the text inside an uploaded file, a short
+    // extract around the match (set by ItemController). Null otherwise.
+    @Transient
+    private String textMatch;
+
+    public String getTextMatch() {
+        return textMatch;
+    }
+
+    public void setTextMatch(String textMatch) {
+        this.textMatch = textMatch;
+    }
+
+    // Other fields: getters only, no setters, this is read-only
 
     public Long getId() {
         return id;

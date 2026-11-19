@@ -120,6 +120,33 @@ describe("links", () => {
     });
 });
 
+describe("matches inside a file", () => {
+    function renderMatch(textMatch, highlight) {
+        const item = note({ hasFile: true, type: "code", folderIds: [1], originalFileName: "lab.py", sizeBytes: 10, textMatch });
+        render(<ul><ItemCard item={item} folders={FOLDERS} highlight={highlight} /></ul>);
+    }
+
+    it("shows the extract with every match marked, ignoring capitals", () => {
+        renderMatch("…def QuickSort(a): return quicksort(a)…", "quicksort");
+
+        const marks = document.querySelectorAll("mark");
+        expect(screen.getByText("Found in file:")).toBeInTheDocument();
+        expect([...marks].map(m => m.textContent)).toEqual(["QuickSort", "quicksort"]);
+    });
+
+    it("treats regex characters in the search literally", () => {
+        renderMatch("x = a.b(c) + 1", "a.b(c)");
+
+        expect(document.querySelector("mark")).toHaveTextContent("a.b(c)");
+    });
+
+    it("shows no extract when the match wasn't inside the file", () => {
+        renderMatch(null, "lab");
+
+        expect(screen.queryByText("Found in file:")).not.toBeInTheDocument();
+    });
+});
+
 describe("display", () => {
     it("shows the item's folders and tags", () => {
         renderCard(note({ folderIds: [1] }));

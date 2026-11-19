@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -110,6 +111,9 @@ public class ItemService {
         item.setContentType(kind.contentType());
         item.setSizeBytes((long) bytes.length);
         item = itemRepository.save(item);
+        if (hasSearchableText(kind.type())) {
+            itemRepository.saveText(item.getId(), searchableText(bytes));
+        }
 
         List<String> tags = new ArrayList<>();
         if (kind.type().equals("code")) {
@@ -157,6 +161,21 @@ public class ItemService {
     private Item findOwned(Identity identity, Long itemId) {
         return itemRepository.findByIdAndIdentityId(itemId, identity.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found"));
+    }
+
+    /** Text and code files can be searched inside; images can't. */
+    public static boolean hasSearchableText(String itemType) {
+        return itemType.equals("text") || itemType.equals("code");
+    }
+
+    /**
+     * The file's text as stored for searching. FileClassifier has already checked text/code files
+     * are valid UTF-8 without NUL bytes (which PostgreSQL text can't hold); a leading byte-order
+     * mark is dropped so it can't split the first word.
+     */
+    public static String searchableText(byte[] bytes) {
+        String text = new String(bytes, StandardCharsets.UTF_8).replace("\u0000", "");
+        return !text.isEmpty() && text.charAt(0) == 0xFEFF ? text.substring(1) : text;
     }
 
     /** Every uploaded file (image, text or code) must always be in at least one folder. */

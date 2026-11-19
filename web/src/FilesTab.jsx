@@ -104,7 +104,7 @@ export default function FilesTab() {
                     type="search"
                     value={query}
                     onChange={e => setQuery(e.target.value)}
-                    placeholder="Search your files by title, filename or tag"
+                    placeholder="Search your files by title, filename, tag or the text inside them"
                     aria-label="Search your files"
                 />
             </div>
@@ -142,7 +142,8 @@ export default function FilesTab() {
             {items && items.length > 0 && (
                 <ul>
                     {items.map(item => (
-                        <ItemCard key={item.id} item={item} folders={folders} onChanged={refresh} />
+                        <ItemCard key={item.id} item={item} folders={folders} onChanged={refresh}
+                                  highlight={query} />
                     ))}
                 </ul>
             )}
